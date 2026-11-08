@@ -1536,7 +1536,7 @@ esquema: [
    "Ejemplo: forward contratado el 1 de julio a 2 meses → 1 de septiembre + 2 días hábiles = <b>3 de septiembre</b>.",
    "El banco contacta con la empresa <b>2 días hábiles antes</b> del vencimiento para confirmar la entrega."
  ]},
- {k:"formula", t:"Premio y descuento (regla del tema)", f:"Forward = Spot − premio      |      Forward = Spot + descuento", nota:"Con <b>premio</b>: la divisa vale más a plazo que al contado y el tipo a plazo cotiza más bajo. Con <b>descuento</b>: la divisa vale menos a plazo y el tipo a plazo cotiza más alto."},
+ {k:"formula", t:"Premio y descuento", f:"Forward = Spot + premio      |      Forward = Spot − descuento", nota:"Con <b>premio</b> la divisa vale más a plazo que al contado: el premio se <b>suma</b> al spot y el forward sale más alto. Con <b>descuento</b> vale menos a plazo: el descuento se <b>resta</b> y el forward sale más bajo. Ojo: los apuntes lo decían al revés; la profesora confirmó que los premios se suman y los descuentos se restan."},
  {k:"formula", t:"Tipo cruzado (sin el dólar)", f:"CHF/PLN = USD/PLN ÷ USD/CHF = 4,19089 ÷ 1,66158 = 2,52223", nota:"En cotizaciones internacionales la moneda base es el dólar. Un tipo <b>cruzado</b> es el que no incluye el dólar: se obtiene dividiendo las dos cotizaciones contra el dólar."},
  {k:"caso", t:"Ejemplo de riesgo de cambio (patines a Bielorrusia)", plan:"Vendemos por 5.000 € con cobro a 300 días. Hoy EUR/BYR = 5,00, así que nos pagarán 25.000 rublos.", sol:"Al cobrar, el euro se ha apreciado: EUR/BYR = 10,00. Los 25.000 rublos solo valen <b>2.500 €</b>. Hemos perdido 2.500 € sobre el precio inicial."},
  {k:"ojo", items:[
@@ -1557,7 +1557,7 @@ flash: [
  ["Plazo máximo de una operación spot","Dos días hábiles."],
  ["¿Qué es el spread bid-offer?","La diferencia entre el precio de compra y el de venta. Más ajustado en grandes operaciones."],
  ["¿De qué depende el tipo forward?","Del tipo al contado y del diferencial de tipos de interés entre las dos divisas."],
- ["Premio y descuento: ¿se suman o se restan al spot?","Los premios se restan del spot; los descuentos se suman."],
+ ["Premio y descuento: ¿se suman o se restan al spot?","Los premios se suman al spot; los descuentos se restan."],
  ["¿Qué es un tipo de cambio cruzado?","El que no incluye el dólar. Se calcula dividiendo las dos cotizaciones contra el dólar."],
  ["Swap de divisas (tema 4)","Compra de una divisa al contado y venta simultánea a plazo, o al revés."],
  ["Tres objetivos de la AEVM","Proteger a los inversores, el orden de los mercados y la estabilidad financiera."]
@@ -1575,7 +1575,7 @@ test: [
  {p:"Comprar una divisa al contado y venderla simultáneamente a plazo es…", o:["Un swap","Una opción put","Un futuro","Un spot doble"], c:0, e:"También vale al revés: vender al contado y comprar a plazo."},
  {p:"El spread bid-offer será más ajustado…", o:["En grandes operaciones","En operaciones pequeñas","Siempre igual","Solo en divisas exóticas"], c:0, e:"Los clientes con grandes operaciones pueden ir directamente al mercado y consiguen spreads más ajustados."},
  {p:"Un forward contratado el 1 de julio a dos meses se liquida el…", o:["3 de septiembre","1 de septiembre","1 de agosto","3 de julio"], c:0, e:"1 de septiembre + 2 días hábiles (el plazo spot) = 3 de septiembre."},
- {p:"Según la regla del tema, para obtener el tipo forward cuando hay premio…", o:["Se resta el premio al tipo spot","Se suma el premio al tipo spot","Se multiplica el spot por el premio","Se divide el spot entre el premio"], c:0, e:"Los premios se restan y los descuentos se suman."},
+ {p:"Para obtener el tipo forward cuando hay premio…", o:["Se resta el premio al tipo spot","Se suma el premio al tipo spot","Se multiplica el spot por el premio","Se divide el spot entre el premio"], c:1, e:"Los premios se suman y los descuentos se restan."},
  {p:"Un tipo de cambio cruzado es aquel en el que…", o:["Ninguna de las monedas es el dólar","Una de las monedas es el euro","Las dos monedas son exóticas","Se cambia en dos países distintos"], c:0, e:"En cotizaciones internacionales la base es el dólar; el cruzado se calcula sin él."},
  {p:"¿Cuál NO es un objetivo de la AEVM?", o:["Fijar los tipos de cambio oficiales","Proteger a los inversores","El orden de los mercados","La estabilidad financiera"], c:0, e:"La AEVM no fija tipos de cambio. Sus tres objetivos son los otros tres."}
 ],
@@ -1583,7 +1583,7 @@ ejercicios: [
  {p:"El tipo EUR/USD es 1,08. ¿Cuántos dólares obtienes por 2.500 €?", r:2700, u:"USD", pasos:["En EUR/USD 1,08, 1 € = 1,08 $.","2.500 × 1,08 = <b>2.700 USD</b>."]},
  {p:"Vendes por 8.000 € a un cliente que paga en su moneda local (XXX), con cobro aplazado. Hoy EUR/XXX = 4,00, así que fijáis el precio en 32.000 XXX. Al cobrar, EUR/XXX = 5,00. ¿Cuántos euros recibes?", r:6400, u:"EUR", pasos:["Cobras 32.000 XXX.","Al nuevo cambio, 1 € = 5 XXX → 32.000 ÷ 5 = <b>6.400 €</b>.","Has perdido 1.600 € por el riesgo de cambio (el euro se apreció)."]},
  {p:"Cotizaciones: USD/CHF = 0,8850 y USD/PLN = 3,9825. Calcula el tipo cruzado CHF/PLN (zlotys por cada franco suizo).", r:4.5, u:"PLN por CHF", dec:4, pasos:["Tipo cruzado = USD/PLN ÷ USD/CHF.","3,9825 ÷ 0,8850 = <b>4,5000</b>."]},
- {p:"El tipo spot es 1,1520 y la divisa cotiza a plazo con un premio de 0,0035. Según la regla del tema, ¿cuál es el tipo forward?", r:1.1485, dec:4, pasos:["Los premios se restan del tipo spot.","1,1520 − 0,0035 = <b>1,1485</b>."]}
+ {p:"El tipo spot es 1,1520 y la divisa cotiza a plazo con un premio de 0,0035. ¿Cuál es el tipo forward?", r:1.1555, dec:4, pasos:["Los premios se suman al tipo spot.","1,1520 + 0,0035 = <b>1,1555</b>."]}
 ]
 },
 
@@ -1922,7 +1922,7 @@ ESTUDIO.ampliar("financiacion", {
   {p:"¿Qué tipos de divisas existen? Pon un ejemplo de cada una.", r:"<b>Convertible</b>: se intercambia sin restricciones (dólar USD). <b>No convertible</b>: no aceptada en el mercado internacional (el apunte pone el peso chileno). <b>Bilateral</b>: usada por varios países en un convenio para liquidar operaciones. <b>Exótica</b>: sin amplio mercado internacional (real brasileño; yuan chino, que sí es convertible). <b>Fuerte</b>: estable, sin grandes fluctuaciones por inflación (euro).", k:["convertible (USD)","no convertible","bilateral","exótica (real, yuan)","fuerte (euro)"]},
   {p:"¿Qué es el tipo de cambio y cómo se lee EUR/USD 1,14?", r:"Es el <b>número de unidades de una moneda que se cambian por una unidad de otra</b>. Las monedas se nombran con 3 letras y los pares con 6: las 3 primeras son la <b>moneda base</b> y las 3 últimas la <b>cotizada</b>. EUR/USD 1,14 significa que <b>1 euro cotiza a 1,14 dólares</b>. El tipo de cambio es doble: hay un precio comprador y otro vendedor.", k:["unidades de una moneda por una de otra","base / cotizada","1 € = 1,14 $","precio comprador y vendedor"]},
   {p:"¿Qué tipos de transacciones hay en el FOREX?", r:"Principales: <b>al contado o spot</b> (se liquidan en <b>no más de dos días hábiles</b>) y <b>a plazo o forward</b> (se acuerda hoy y se ejecuta en una fecha futura fijada en contrato, de obligado cumplimiento; son las más comunes). Otras: <b>futuros</b> (plazo con contrato <b>estandarizado</b>), <b>opciones</b> (derivado: se adquiere el <b>derecho pero no la obligación</b> de comprar o vender) y <b>swaps</b> (comprar una divisa al contado y venderla a plazo a la vez, o al revés).", k:["spot: ≤ 2 días hábiles","forward: fecha futura, obligatorio","futuros: estandarizado","opciones: derecho, no obligación","swaps: contado + plazo"]},
-  {p:"Explica el mercado a plazo (forward), el premio y el descuento.", r:"La compraventa se acuerda al contratar, pero se ejecuta en una <b>fecha futura, más allá de dos días hábiles</b>. El tipo forward depende del <b>tipo spot y del diferencial de tipos de interés</b> de las dos divisas, por eso rara vez coincide con el spot. El cliente pide cotización a su banco, la acepta y firma; el banco contacta dos días hábiles antes del vencimiento. Una divisa cotiza con <b>premio</b> si vale más a plazo que al contado, y con <b>descuento</b> si vale menos. Regla del tema: <b>los premios se restan</b> del tipo spot y <b>los descuentos se suman</b> para obtener el forward.", k:["fecha futura (> 2 días hábiles)","spot + diferencial de intereses","premio: se resta","descuento: se suma"]}
+  {p:"Explica el mercado a plazo (forward), el premio y el descuento.", r:"La compraventa se acuerda al contratar, pero se ejecuta en una <b>fecha futura, más allá de dos días hábiles</b>. El tipo forward depende del <b>tipo spot y del diferencial de tipos de interés</b> de las dos divisas, por eso rara vez coincide con el spot. El cliente pide cotización a su banco, la acepta y firma; el banco contacta dos días hábiles antes del vencimiento. Una divisa cotiza con <b>premio</b> si vale más a plazo que al contado, y con <b>descuento</b> si vale menos. Para obtener el forward, <b>los premios se suman</b> al tipo spot y <b>los descuentos se restan</b>.", k:["fecha futura (> 2 días hábiles)","spot + diferencial de intereses","premio: se suma","descuento: se resta"]}
  ],
  test: [
   {p:"Una divisa que se puede intercambiar sin restricciones en el mercado internacional es…", o:["Convertible","No convertible","Bilateral","Exótica"], c:0, e:"Ejemplo: el dólar estadounidense."},
@@ -1932,7 +1932,7 @@ ESTUDIO.ampliar("financiacion", {
   {p:"La transacción en la que se adquiere el derecho, pero no la obligación, de comprar o vender es…", o:["Una opción","Un forward","Un swap","Un spot"], c:0, e:"El forward es de obligado cumplimiento."},
   {p:"Comprar una divisa al contado y venderla a la vez a plazo es un…", o:["Swap","Futuro","Spot","Seguro de crédito"], c:0, e:"También se puede hacer al revés."},
   {p:"Un futuro sobre divisas es una transacción a plazo con contrato…", o:["Estandarizado","A medida","Verbal","Sin vencimiento"], c:0, e:"El forward es a medida."},
-  {p:"Según la regla del tema, para obtener el tipo forward…", o:["Los premios se restan y los descuentos se suman al spot","Los premios se suman y los descuentos se restan","Siempre se suma el diferencial","El forward siempre es igual al spot"], c:0, e:"Regla tal como aparece en los apuntes."}
+  {p:"Para obtener el tipo forward…", o:["Los premios se restan y los descuentos se suman al spot","Los premios se suman y los descuentos se restan","Siempre se suma el diferencial","El forward siempre es igual al spot"], c:1, e:"Los premios se suman al spot y los descuentos se restan (confirmado por la profesora)."}
  ]
 },
 5: {
