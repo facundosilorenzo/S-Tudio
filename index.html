@@ -537,7 +537,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,tr.go:focus-visible,tex
   .board-head::after{left:12px;right:12px}
   .board table,.board tbody{display:block;min-width:0}
   .board thead{display:none}
-  .board tr.go{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"cod sub chip" "cod fecha falta" "cod prog prog";gap:4px 12px;align-items:center;padding:13px 8px;border-top:1px solid rgb(255 255 255 / .06);border-radius:12px;transition:background-color .2s ease}
+  .board tr.go{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"cod sub chip" "cod fecha falta";gap:4px 12px;align-items:center;padding:13px 8px;border-top:1px solid rgb(255 255 255 / .06);border-radius:12px;transition:background-color .2s ease}
   .board tbody tr.go:first-child{border-top:0}
   .board td{display:block;padding:0;border:0 !important;background:none !important}
   .board td:nth-child(1){grid-area:cod}
@@ -545,11 +545,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,tr.go:focus-visible,tex
   .board td:nth-child(3){grid-area:fecha;color:var(--board-dim)}
   .board td:nth-child(4){grid-area:falta;text-align:right;color:var(--board-dim)}
   .board td:nth-child(4):empty{display:none}
-  .board td:nth-child(5){grid-area:prog}
-  .board td:nth-child(5) .mini{width:100%;flex:1}
-  .board td:nth-child(5) .row{display:grid !important;grid-template-columns:1fr auto;align-items:center}
   .board-head span{display:none}
-  .board td:nth-child(6){grid-area:chip;justify-self:end}
+  .board td:nth-child(5){grid-area:chip;justify-self:end}
   .board td.mono{font-size:.72rem}
   .board tr.go:active{background:rgb(255 255 255 / .06)}
   .flap i{font-size:.82rem;padding:2px 5px}
@@ -702,7 +699,6 @@ function vistaInicio(){
       <td class="sub"><span class="dot"></span>${esc(a.nombre)}</td>
       <td class="mono">${fmtFecha(a.examen)}</td>
       <td class="mono">${d>0? d+' d' : d===0? '—' : ''}</td>
-      <td>${a.listo? `<div class="row" style="gap:8px"><div class="mini"><b style="width:${pr}%"></b></div><span class="mono" style="font-size:.8rem">${pr}%</span></div>`:''}</td>
       <td>${chip}</td></tr>`;
   }).join('');
   const d = p? diasHasta(p.examen):null;
@@ -714,9 +710,8 @@ function vistaInicio(){
   </section>
   <section class="board" aria-label="Calendario de exámenes">
     <div class="board-head"><h2>Salidas · Exámenes</h2><span>Noviembre 2026</span></div>
-    <table><thead><tr><th>Cód.</th><th>Asignatura</th><th>Fecha</th><th>Faltan</th><th>Progreso</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table>
+    <table><thead><tr><th>Cód.</th><th>Asignatura</th><th>Fecha</th><th>Faltan</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table>
   </section>
-  <p class="note">Tu progreso se guarda en este navegador. Si estudias en el móvil y en el ordenador, cada uno lleva su propio registro.</p>
   ${pie()}`;
   if(!flapHecho && !reduceMotion()){ app.classList.add('intro'); setTimeout(()=>app.classList.remove('intro'), 1400); }
   flapShuffle(app);
@@ -735,18 +730,14 @@ function vistaAsig(sid){
   const cards = d.temas.map(t=>{
     const p=progresoTema(sid,t);
     return `<button class="tcard" onclick="ir('${sid}-t${t.n}')">
-      <span class="row" style="justify-content:space-between;gap:8px"><span class="num">TEMA ${t.n}</span>${t.examen?.length?'<span class="tag">Entra en examen</span>':''}</span><h3>${esc(t.titulo)}</h3><p>${esc(t.idea)}</p>
-      <div class="meters">
-        <span>Test</span><div class="bar"><b style="width:${p.best||0}%"></b></div><span class="mono">${p.best==null?'—':p.best+'%'}</span>
-        <span>Tarjetas</span><div class="bar"><b style="width:${p.fcs? p.known/p.fcs*100:0}%"></b></div><span class="mono">${p.known}/${p.fcs}</span>
-      </div></button>`;
+      <span class="row" style="justify-content:space-between;gap:8px"><span class="num">TEMA ${t.n}</span>${t.examen?.length?'<span class="tag">Entra en examen</span>':''}</span><h3>${esc(t.titulo)}</h3><p>${esc(t.idea)}</p></button>`;
   }).join('');
   const sim=P.tests[`${sid}-sim`]; const conEx=d.temas.filter(t=>t.examen?.length);
   app.innerHTML = topbar(`<button onclick="ir('')">Inicio</button><span>/</span><span>${esc(a.nombre)}</span>`) + `
   <div class="subj-head"><div><span class="eyebrow">${a.cod} · ${d.temas.length} temas · ${nq} preguntas</span><h1>${esc(a.nombre)}</h1></div>
     <div class="countdown"><div class="eyebrow">Examen ${fmtFecha(a.examen)}</div><div class="big" style="font-size:2.4rem">${dias>0? dias+' días' : dias===0? 'Hoy':'Hecho'}</div></div></div>
   <div class="actions">
-    <button class="btn primary" onclick="ir('${sid}-simulacro')">Simulacro tipo examen <span class="n">${sim? 'mejor '+fmtN(sim.best/10,1) : 'test + cortas + ejercicios'}</span></button>
+    <button class="btn primary" onclick="ir('${sid}-simulacro')">Simulacro tipo examen <span class="n">test + cortas + ejercicios</span></button>
     ${sid==='ingles'?`<button class="btn" onclick="ir('ingles-writing')">Writing <span class="n">corrige Claude</span></button>`:''}
     <button class="btn" onclick="ir('${sid}-fallos')" ${nf?'':'disabled'}>Repasar mis fallos <span class="n">${nf}</span></button>
     <button class="btn" onclick="ir('${sid}-repaso')">Todas las tarjetas</button>
@@ -1223,7 +1214,7 @@ function vistaWriting(sid){
     p.scrollIntoView({behavior:'smooth', block:'start'}); ta.focus({preventScroll:true}); });
 }
 
-function pie(){ return `<div class="foot"><span>Contenido elaborado a partir de los apuntes del curso.</span><button onclick="borrar(this)">Borrar mi progreso</button></div>`; }
+function pie(){ return `<div class="foot"><span>Contenido elaborado a partir de los apuntes del curso.</span></div>`; }
 function borrar(b){ if(!b.dataset.c){ b.dataset.c=1; b.textContent='Pulsa otra vez para borrar todo el progreso'; return; } P={tests:{},fallos:{},flash:{},ex:{},ct:{}}; save(); render(); }
 
 /* ---------- Datos integrados ---------- */
