@@ -828,12 +828,15 @@ function vistaFlashAll(sid){
 }
 
 /* ---------- Test / simulacro ---------- */
+const fueraSim=(d,n)=>(d.simulacro?.fuera||[]).includes(+n);
+const temasSim=d=>d.temas.filter(t=>!fueraSim(d,t.n));
 function vistaQuiz(sid, modo){
   const a=asig(sid), d=DATA[sid]; setAcc(sid);
   let preguntas = todasPreguntas(sid);
   let titulo='Simulacro de examen';
   if(modo==='fallos'){ preguntas = preguntas.filter(q=>P.fallos[q.id]); titulo='Repaso de fallos'; }
   else {
+    preguntas = preguntas.filter(q=>!fueraSim(d,q.tema));
     // Simulacro: reparto equilibrado entre temas
     const n = Math.min(d.simulacro?.n||25, preguntas.length);
     const porTema={}; preguntas.forEach(q=>(porTema[q.tema]=porTema[q.tema]||[]).push(q));
@@ -1042,17 +1045,17 @@ function vistaExamen(sid){
   const a=asig(sid), d=DATA[sid]; setAcc(sid);
   const MIN = d.simulacro?.examen || 60;
   // Parte 1: 20 preguntas tipo test (prioriza las de los puntos de examen si existen)
-  const todas=todasPreguntas(sid), xs=todas.filter(q=>q.x), resto=todas.filter(q=>!q.x);
+  const todas=todasPreguntas(sid).filter(q=>!fueraSim(d,q.tema)), xs=todas.filter(q=>q.x), resto=todas.filter(q=>!q.x);
   let test;
   if(xs.length>=8){ const nx=Math.min(15, xs.length); test=repartir(xs,nx).concat(repartir(resto, 20-nx)); }
   else test=repartir(todas, 20);
   test = shuffle(test).map(q=>({...q, orden:shuffle(q.o.map((_,i)=>i))}));
   // Parte 2: preguntas cortas (de los puntos de examen; si no hay, a partir de las tarjetas)
-  let poolC=[]; d.temas.forEach(t=>(t.cortas||[]).forEach((c,i)=>poolC.push({...c, tema:t.n, id:`${sid}-t${t.n}-c${i}`})));
-  if(!poolC.length) d.temas.forEach(t=>t.flash.forEach((f,i)=>poolC.push({p:f[0], r:f[1], k:[], tema:t.n, id:`${sid}-t${t.n}-f${i}`})));
+  let poolC=[]; temasSim(d).forEach(t=>(t.cortas||[]).forEach((c,i)=>poolC.push({...c, tema:t.n, id:`${sid}-t${t.n}-c${i}`})));
+  if(!poolC.length) temasSim(d).forEach(t=>t.flash.forEach((f,i)=>poolC.push({p:f[0], r:f[1], k:[], tema:t.n, id:`${sid}-t${t.n}-f${i}`})));
   const cortas=repartir(poolC, 5);
   // Parte 3: 1 o 2 ejercicios prácticos (primero los de cálculo)
-  let poolE=[]; d.temas.forEach(t=>(t.ejercicios||[]).forEach((x,k)=>poolE.push({...x, tema:t.n, id:`${sid}-t${t.n}-e${k}`})));
+  let poolE=[]; temasSim(d).forEach(t=>(t.ejercicios||[]).forEach((x,k)=>poolE.push({...x, tema:t.n, id:`${sid}-t${t.n}-e${k}`})));
   let ejs=repartir(poolE.filter(x=>x.r!=null), 2); if(ejs.length<2) ejs=ejs.concat(repartir(poolE.filter(x=>x.r==null), 2-ejs.length));
   const wr = sid==='ingles'? WRITING[Math.floor(Math.random()*WRITING.length)] : null;
   const ptsC = 3/cortas.length, ptsE = ejs.length? 4/ejs.length : 0, MAX = 3 + (cortas.length?3:0) + (ejs.length?4:0);
@@ -1224,7 +1227,7 @@ function borrar(b){ if(!b.dataset.c){ b.dataset.c=1; b.textContent='Pulsa otra v
 /* Financiación Internacional — contenido elaborado a partir de los apuntes (Temas 1 a 7) */
 ESTUDIO.registrar({
 id: "financiacion",
-simulacro: {n: 30, min: 35},
+simulacro: {n: 30, min: 35, fuera: [7]},
 temas: [
 
 /* ======================= TEMA 1 ======================= */
