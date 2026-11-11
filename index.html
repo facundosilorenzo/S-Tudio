@@ -740,7 +740,7 @@ function vistaAsig(sid){
   <div class="subj-head"><div><span class="eyebrow">${a.cod} · ${d.temas.length} temas · ${nq} preguntas</span><h1>${esc(a.nombre)}</h1></div>
     <div class="countdown"><div class="eyebrow">Examen ${fmtFecha(a.examen)}</div><div class="big" style="font-size:2.4rem">${dias>0? dias+' días' : dias===0? 'Hoy':'Hecho'}</div></div></div>
   <div class="actions">
-    <button class="btn primary" onclick="ir('${sid}-simulacro')">Simulacro tipo examen <span class="n">test + cortas + ejercicios</span></button>
+    <button class="btn primary" onclick="ir('${sid}-simulacro')">Simulacro tipo examen <span class="n">${DATA[sid]?.simulacro?.formato?.nc===0?'test + ejercicios':'test + cortas + ejercicios'}</span></button>
     ${sid==='ingles'?`<button class="btn" onclick="ir('ingles-writing')">Writing <span class="n">corrige Claude</span></button>`:''}
     <button class="btn" onclick="ir('${sid}-fallos')" ${nf?'':'disabled'}>Repasar mis fallos <span class="n">${nf}</span></button>
     <button class="btn" onclick="ir('${sid}-repaso')">Todas las tarjetas</button>
@@ -1044,33 +1044,36 @@ const nPal = s => (String(s).trim().match(/[A-Za-zÀ-ÿ0-9'’-]+/g)||[]).length
 function vistaExamen(sid){
   const a=asig(sid), d=DATA[sid]; setAcc(sid);
   const MIN = d.simulacro?.examen || 60;
+  // Formato del examen: nº de preguntas y puntos de cada parte (por defecto 20 test · 5 cortas · 2 ejercicios = 3 + 3 + 4)
+  const F={nt:20, nc:5, ne:2, pt:3, pc:3, pe:4, ...(d.simulacro?.formato||{})};
   // Parte 1: 20 preguntas tipo test (prioriza las de los puntos de examen si existen)
   const todas=todasPreguntas(sid).filter(q=>!fueraSim(d,q.tema)), xs=todas.filter(q=>q.x), resto=todas.filter(q=>!q.x);
   let test;
-  if(xs.length>=8){ const nx=Math.min(15, xs.length); test=repartir(xs,nx).concat(repartir(resto, 20-nx)); }
-  else test=repartir(todas, 20);
+  if(xs.length>=8 && !F.mix){ const nx=Math.min(Math.round(F.nt*0.75), xs.length); test=repartir(xs,nx).concat(repartir(resto, F.nt-nx)); }
+  else test=repartir(todas, F.nt);
   test = shuffle(test).map(q=>({...q, orden:shuffle(q.o.map((_,i)=>i))}));
   // Parte 2: preguntas cortas (de los puntos de examen; si no hay, a partir de las tarjetas)
   let poolC=[]; temasSim(d).forEach(t=>(t.cortas||[]).forEach((c,i)=>poolC.push({...c, tema:t.n, id:`${sid}-t${t.n}-c${i}`})));
   if(!poolC.length) temasSim(d).forEach(t=>t.flash.forEach((f,i)=>poolC.push({p:f[0], r:f[1], k:[], tema:t.n, id:`${sid}-t${t.n}-f${i}`})));
-  const cortas=repartir(poolC, 5);
+  const cortas=F.nc? repartir(poolC, F.nc) : [];
   // Parte 3: 1 o 2 ejercicios prácticos (primero los de cálculo)
   let poolE=[]; temasSim(d).forEach(t=>(t.ejercicios||[]).forEach((x,k)=>poolE.push({...x, tema:t.n, id:`${sid}-t${t.n}-e${k}`})));
-  let ejs=repartir(poolE.filter(x=>x.r!=null), 2); if(ejs.length<2) ejs=ejs.concat(repartir(poolE.filter(x=>x.r==null), 2-ejs.length));
+  let ejs=repartir(poolE.filter(x=>x.r!=null), F.ne); if(ejs.length<F.ne) ejs=ejs.concat(repartir(poolE.filter(x=>x.r==null), F.ne-ejs.length));
   const wr = sid==='ingles'? WRITING[Math.floor(Math.random()*WRITING.length)] : null;
-  const ptsC = 3/cortas.length, ptsE = ejs.length? 4/ejs.length : 0, MAX = 3 + (cortas.length?3:0) + (ejs.length?4:0);
+  const ptsC = cortas.length? F.pc/cortas.length : 0, ptsE = ejs.length? F.pe/ejs.length : 0, MAX = F.pt + (cortas.length?F.pc:0) + (ejs.length?F.pe:0);
+  const vOk=10/test.length, vMal=4/test.length;
 
   const respT=new Array(test.length).fill(null);
   app.innerHTML = topbar(`<button onclick="ir('')">Inicio</button><span>/</span><button onclick="ir('${sid}')">${esc(a.nombre)}</button><span>/</span><span>Simulacro</span>`)+`
   <h1>Simulacro tipo examen</h1>
-  <p class="muted" style="margin-top:8px;max-width:70ch">Mismo formato que el examen: <b>20 preguntas tipo test</b> (3 puntos), <b>${cortas.length} preguntas cortas</b> (3 puntos) y <b>${ejs.length} ejercicio${ejs.length===1?'':'s'} práctico${ejs.length===1?'':'s'}</b> (4 puntos)${wr?', más un <b>writing</b> que se corrige aparte':''}. Tienes ${MIN} minutos. Al entregar ves la nota sobre 10.</p>
+  <p class="muted" style="margin-top:8px;max-width:70ch">Mismo formato que el examen: <b>${test.length} preguntas tipo test</b> (${fmtN(F.pt,0)} puntos)${cortas.length?`, <b>${cortas.length} preguntas cortas</b> (${fmtN(F.pc,0)} puntos)`:''} y <b>${ejs.length} ejercicio${ejs.length===1?'':'s'} práctico${ejs.length===1?'':'s'}</b> (${fmtN(F.pe,0)} puntos)${wr?', más un <b>writing</b> que se corrige aparte':''}. Tienes ${MIN} minutos. Al entregar ves la nota sobre 10.</p>
   <div class="bar-exam"><span class="timer" id="timer"></span><span class="mono muted" id="prog"></span><button class="btn primary" data-a="entregar">Entregar y corregir</button></div>
-  <section class="exam-sec"><header><h2>Parte 1 · Test</h2><span class="mono">3 puntos</span><p>Acierto +0,5 · fallo −0,2 (sobre 10, luego se pasa a 3 puntos) · en blanco 0. Para dejar una en blanco, vuelve a pulsar la opción marcada.</p></header>
+  <section class="exam-sec"><header><h2>Parte 1 · Test</h2><span class="mono">${fmtN(F.pt,0)} puntos</span><p>Acierto +${fmtN(vOk,2)} · fallo −${fmtN(vMal,2)} (sobre 10, luego se pasa a ${fmtN(F.pt,0)} puntos) · en blanco 0. Para dejar una en blanco, vuelve a pulsar la opción marcada.</p></header>
     <div class="stack">${test.map((q,i)=>`<div class="eq" data-i="${i}"><div class="qtop"><span class="eyebrow">${i+1} de ${test.length} · Tema ${q.tema}</span></div><div class="qtext">${q.p}</div>
       <div class="opts">${q.orden.map((oi,k)=>`<button class="opt" data-o="${oi}" aria-pressed="false"><span class="l">${'ABCD'[k]}</span><span>${q.o[oi]}</span></button>`).join('')}</div></div>`).join('')}</div></section>
-  <section class="exam-sec"><header><h2>Parte 2 · Preguntas cortas</h2><span class="mono">3 puntos</span><p>Responde con tus palabras, como en el examen. ${fmtN(ptsC,2)} puntos cada una.</p></header>
-    <div class="stack">${cortas.map((c,i)=>`<div class="eq"><span class="eyebrow">Pregunta ${i+1} · Tema ${c.tema}</span><div class="qtext" style="margin-top:6px">${c.p}</div><textarea class="resp" data-c="${i}" placeholder="Tu respuesta…" aria-label="Respuesta a la pregunta corta ${i+1}"></textarea></div>`).join('')}</div></section>
-  ${ejs.length?`<section class="exam-sec"><header><h2>Parte 3 · Ejercicios prácticos</h2><span class="mono">4 puntos</span><p>Resuélvelos en papel con todos los pasos. ${ejs.some(x=>x.r!=null)?'En los de cálculo escribe aquí el resultado final. ':''}Al corregir podrás subir la foto de tu hoja.</p></header>
+  ${cortas.length?`<section class="exam-sec"><header><h2>Parte 2 · Preguntas cortas</h2><span class="mono">${fmtN(F.pc,0)} puntos</span><p>Responde con tus palabras, como en el examen. ${fmtN(ptsC,2)} puntos cada una.</p></header>
+    <div class="stack">${cortas.map((c,i)=>`<div class="eq"><span class="eyebrow">Pregunta ${i+1} · Tema ${c.tema}</span><div class="qtext" style="margin-top:6px">${c.p}</div><textarea class="resp" data-c="${i}" placeholder="Tu respuesta…" aria-label="Respuesta a la pregunta corta ${i+1}"></textarea></div>`).join('')}</div></section>`:''}
+  ${ejs.length?`<section class="exam-sec"><header><h2>Parte ${cortas.length?3:2} · Ejercicios prácticos</h2><span class="mono">${fmtN(F.pe,0)} puntos</span><p>Resuélvelos en papel con todos los pasos. ${ejs.some(x=>x.r!=null)?'En los de cálculo escribe aquí el resultado final. ':''}Al corregir podrás subir la foto de tu hoja.</p></header>
     <div class="stack">${ejs.map((x,i)=>`<div class="eq"><span class="eyebrow">Ejercicio ${i+1} · Tema ${x.tema} · ${fmtN(ptsE,1)} puntos${x.r==null?' · desarrollo':''}</span><div style="margin:6px 0 10px">${x.p}</div>
       ${x.r!=null?`<div class="ex" style="padding:0;border:0;background:none"><div class="ans"><input data-e="${i}" inputmode="decimal" placeholder="Resultado final" aria-label="Resultado del ejercicio ${i+1}"> <span class="mono muted">${x.u||''}</span></div></div>`:`<textarea class="resp" data-e="${i}" placeholder="Puedes escribir aquí tu resolución o hacerla en papel" aria-label="Resolución del ejercicio ${i+1}"></textarea>`}</div>`).join('')}</div></section>`:''}
   ${wr?`<section class="exam-sec"><header><h2>Parte 4 · Writing</h2><span class="mono">aparte</span><p>Se corrige por separado y no suma en la nota de arriba.</p></header>
@@ -1099,7 +1102,7 @@ function vistaExamen(sid){
     const wtxt = wta? wta.value : '';
     // Test
     let ok=0, mal=0, bl=0; test.forEach((q,i)=>{ const r=respT[i]; if(r===null){ bl++; P.fallos[q.id]=1; } else if(r===q.c){ ok++; delete P.fallos[q.id]; } else { mal++; P.fallos[q.id]=1; } });
-    const t10=Math.max(0, ok*0.5 - mal*0.2), tPts=t10*0.3;
+    const t10=Math.max(0, ok*vOk - mal*vMal), tPts=t10*F.pt/10;
     // Cortas y ejercicios: null = pendiente de corregir
     const cs=cortas.map(()=>null);
     const es=ejs.map((x,i)=>{ if(x.r==null) return null; const v=num(respE[i]); if(isNaN(v)) return 0; const tol = x.tol ?? Math.max(Math.abs(x.r)*0.002, Math.pow(10,-(x.dec??2))); return Math.abs(v-x.r)<=tol? 1 : 0; });
@@ -1112,18 +1115,18 @@ function vistaExamen(sid){
     <div class="qcard" style="max-width:none"><span class="eyebrow">Nota</span>
       <div class="row" style="align-items:baseline;gap:18px;margin:8px 0 4px"><div class="score" id="nota"></div><div class="muted" id="notaTxt"></div></div>
       <div class="notas">
-        <div><span class="lab">Test · 3 p</span><b>${fmtN(tPts,2)}</b><small>${ok} bien · ${mal} mal · ${bl} en blanco<br>${fmtN(t10,1)} sobre 10</small></div>
-        <div><span class="lab">Cortas · 3 p</span><b id="nC"></b><small id="sC"></small></div>
-        ${ejs.length?`<div><span class="lab">Ejercicios · 4 p</span><b id="nE"></b><small id="sE"></small></div>`:''}
+        <div><span class="lab">Test · ${fmtN(F.pt,0)} p</span><b>${fmtN(tPts,2)}</b><small>${ok} bien · ${mal} mal · ${bl} en blanco<br>${fmtN(t10,1)} sobre 10</small></div>
+        ${cortas.length?`<div><span class="lab">Cortas · ${fmtN(F.pc,0)} p</span><b id="nC"></b><small id="sC"></small></div>`:''}
+        ${ejs.length?`<div><span class="lab">Ejercicios · ${fmtN(F.pe,0)} p</span><b id="nE"></b><small id="sE"></small></div>`:''}
       </div>
       <p class="pend" id="pend" hidden></p>
       <div class="row" style="margin-top:16px"><button class="btn primary" onclick="render()">Nuevo simulacro</button>${(mal+bl)?`<button class="btn" onclick="ir('${sid}-fallos')">Repasar mis fallos del test</button>`:''}</div>
     </div>
-    <section class="exam-sec"><header><h2>Preguntas cortas</h2><span class="mono">${fmtN(ptsC,2)} p cada una</span><p id="cHint">${SAMPLE?'Claude las está corrigiendo. Si no estás de acuerdo, cambia tú la nota.':'Compara con la respuesta modelo y ponte nota en cada una.'}</p></header>
+    ${cortas.length?`<section class="exam-sec"><header><h2>Preguntas cortas</h2><span class="mono">${fmtN(ptsC,2)} p cada una</span><p id="cHint">${SAMPLE?'Claude las está corrigiendo. Si no estás de acuerdo, cambia tú la nota.':'Compara con la respuesta modelo y ponte nota en cada una.'}</p></header>
       <div class="stack">${cortas.map((c,i)=>`<div class="eq" data-ci="${i}"><span class="eyebrow">Pregunta ${i+1} · Tema ${c.tema}</span><div class="qtext" style="margin-top:6px">${c.p}</div>
         <span class="lab">Tu respuesta</span><div class="mine">${respC[i].trim()? esc(respC[i]) : '<span class="muted">En blanco</span>'}</div>
         <div class="out" aria-live="polite" style="margin-top:10px"></div>
-        <div class="model" style="margin-top:10px">${modeloHTML(c)}${selfMarkHTML(null)}</div></div>`).join('')}</div></section>
+        <div class="model" style="margin-top:10px">${modeloHTML(c)}${selfMarkHTML(null)}</div></div>`).join('')}</div></section>`:''}
     ${ejs.length?`<section class="exam-sec"><header><h2>Ejercicios prácticos</h2><span class="mono">${fmtN(ptsE,1)} p cada uno</span><p>Si tu resultado no coincide, sube la foto de tu hoja: Claude puede darte la mitad si el planteamiento es bueno. En los de desarrollo, ponte nota o usa la foto.</p></header>
       <div class="stack">${ejs.map((x,i)=>`<div class="ex" data-ei="${i}"><span class="eyebrow">Ejercicio ${i+1} · Tema ${x.tema}</span><div class="enun">${x.p}</div>
         ${x.r!=null?`<div class="res ${es[i]?'ok':'bad'}">${respE[i].trim()? `Tu resultado: ${esc(respE[i])} ${x.u||''} · ${es[i]?'Correcto':'No coincide'}` : 'Sin resultado'}</div>`:(respE[i].trim()?`<span class="lab">Tu resolución</span><div class="mine">${esc(respE[i])}</div>`:'')}
@@ -1134,23 +1137,23 @@ function vistaExamen(sid){
       <span class="lab">Tu texto</span><div class="mine">${wtxt.trim()? esc(wtxt) : '<span class="muted">En blanco</span>'}</div>
       ${wtxt.trim()?`<div class="row" style="margin-top:10px"><button class="btn primary" data-a="ia" ${SAMPLE?'':'hidden'}>Corregir writing con Claude</button><span class="sin-ia muted" ${SAMPLE?'hidden':''}>La corrección del writing funciona al abrir la app desde Claude.</span></div><div class="wout" aria-live="polite" style="margin-top:10px"></div>`:''}</div></section>`:''}
     <section class="exam-sec"><header><h2>Test: revisa tus fallos</h2><span class="mono">${mal+bl}</span></header>
-      ${(mal+bl)?`<div class="review" style="max-width:none">${test.map((q,i)=>({q,r:respT[i]})).filter(x=>x.r!==x.q.c).map(({q,r})=>`<div class="item"><b>${q.p}</b><p>${r===null?'<span class="muted">En blanco.</span><br>':`Tu respuesta: <span style="color:var(--bad)">${q.o[r]}</span> <span class="muted">(−0,2)</span><br>`}Correcta: <span style="color:var(--ok);font-weight:700">${q.o[q.c]}</span></p><p class="muted">${q.e}</p></div>`).join('')}</div>`:'<div class="empty">Ningún fallo en el test.</div>'}</section>
+      ${(mal+bl)?`<div class="review" style="max-width:none">${test.map((q,i)=>({q,r:respT[i]})).filter(x=>x.r!==x.q.c).map(({q,r})=>`<div class="item"><b>${q.p}</b><p>${r===null?'<span class="muted">En blanco.</span><br>':`Tu respuesta: <span style="color:var(--bad)">${q.o[r]}</span> <span class="muted">(−${fmtN(vMal,2)})</span><br>`}Correcta: <span style="color:var(--ok);font-weight:700">${q.o[q.c]}</span></p><p class="muted">${q.e}</p></div>`).join('')}</div>`:'<div class="empty">Ningún fallo en el test.</div>'}</section>
     ${pie()}`;
 
     function recalc(){
       const sc=cs.reduce((s,v)=>s+(v||0),0)*ptsC, se=es.reduce((s,v)=>s+(v||0),0)*ptsE;
       const total=tPts+sc+se, nota=total/MAX*10; const pc=cs.filter(v=>v===null).length, pe=es.filter(v=>v===null).length;
       $('#nota').textContent=fmtN(nota,2); $('#notaTxt').textContent = (pc+pe)? 'nota provisional' : (nota>=5?'aprobado':'suspenso');
-      $('#nC').textContent=fmtN(sc,2); $('#sC').textContent=`${cs.filter(v=>v!==null).length} de ${cs.length} corregidas`;
+      if(cortas.length){ $('#nC').textContent=fmtN(sc,2); $('#sC').textContent=`${cs.filter(v=>v!==null).length} de ${cs.length} corregidas`; }
       if(ejs.length){ $('#nE').textContent=fmtN(se,2); $('#sE').textContent=`${es.filter(v=>v!==null).length} de ${es.length} corregidos`; }
-      const pend=$('#pend'); pend.hidden=!(pc+pe); pend.textContent=`Faltan por corregir ${pc} pregunta${pc===1?'':'s'} corta${pc===1?'':'s'}${ejs.length?` y ${pe} ejercicio${pe===1?'':'s'}`:''}: de momento cuentan como 0.`;
+      const pend=$('#pend'); pend.hidden=!(pc+pe); pend.textContent=`Faltan por corregir ${[pc?`${pc} pregunta${pc===1?'':'s'} corta${pc===1?'':'s'}`:'', pe?`${pe} ejercicio${pe===1?'':'s'}`:''].filter(Boolean).join(' y ')}: de momento cuentan como 0.`;
       const pct=Math.round(nota*10); const p=P.tests[`${sid}-sim`]||{best:0,intentos:1}; P.tests[`${sid}-sim`]={...p, best:Math.max(p.best||0,pct), last:pct}; save();
     }
     // Cortas: autoevaluación + corrección con Claude
     app.querySelectorAll('.eq[data-ci]').forEach(card=>{ const i=Number(card.dataset.ci);
       wireSelfMark(card, v=>{ cs[i]=v; P.ct[cortas[i].id]=v; save(); recalc(); }); });
     async function iaCortas(){
-      if(!SAMPLE) return; const hint=$('#cHint');
+      if(!SAMPLE || !cortas.length) return; const hint=$('#cHint');
       app.querySelectorAll('.eq[data-ci] .out').forEach(o=>o.innerHTML='<div class="corr"><span class="v">Corrigiendo…</span></div>');
       try{ const rs=await corregirCortasIA(cortas.map((c,i)=>({...c, a:respC[i]})));
         rs.forEach((r,i)=>{ const card=app.querySelector(`.eq[data-ci="${i}"]`); if(!card) return; const o=card.querySelector('.out'); o.innerHTML=iaHTML(r); iaFill(o,r);
@@ -1974,7 +1977,7 @@ ESTUDIO.ampliar("financiacion", {
 /* Logística de Almacenamiento — contenido elaborado a partir de los apuntes (Temas 1 a 7) */
 ESTUDIO.registrar({
 id: "logistica",
-simulacro: {n: 30, min: 35},
+simulacro: {n: 30, min: 35, formato: {nt: 30, nc: 0, ne: 2, pt: 6, pe: 4, mix: true}},
 temas: [
 
 /* ======================= TEMA 1 ======================= */
@@ -5539,6 +5542,129 @@ ESTUDIO.extra("financiacion", {
   {p:"Un exportador compra una <b>put</b> para vender 500.000 USD a un strike de 0,9000 €/USD. Prima: 0,005 € por dólar. Al vencimiento el spot es 0,8700 €/USD. Contando la prima, ¿cuántos euros obtiene?", r:447500, dec:2, u:"EUR", pasos:["Con una put se ejerce si el mercado paga <b>menos</b> que el strike: 0,87 < 0,90 → se ejerce.","Venta al strike: 500.000 × 0,9000 = 450.000 €.","Prima: 500.000 × 0,005 = 2.500 €.","Obtiene 450.000 − 2.500 = <b>447.500 €</b>."]},
   {p:"<b>Caso práctico.</b> Una empresa española cobrará 2.000.000 USD dentro de 3 meses y una estadounidense cobrará 1.600.000 € en la misma fecha. Tipo actual: 1 € = 1,25 $. ¿Cómo pueden evitar las dos el riesgo de cambio con un swap?", pasos:["Las dos tienen el riesgo opuesto: una cobra en dólares y quiere euros; la otra cobra en euros y quiere dólares.","Comprueban que los importes equivalen: 1.600.000 € × 1,25 = 2.000.000 $.","Firman un <b>swap de divisas</b>: intercambian sus cobros a ese tipo.","La española recibe <b>1.600.000 €</b> y la estadounidense <b>2.000.000 $</b>, sin depender de cómo se mueva el tipo."]}
  ]}
+});
+/* Tema 8 de Logística (Costes de almacenamiento), añadido a partir del PDF del tema */
+if(DATA.logistica && !DATA.logistica.temas.some(t=>t.n==8)) DATA.logistica.temas.push({
+n: 8,
+titulo: "Costes de almacenamiento",
+idea: "El coste del producto (adquisición, almacenamiento y fabricación), cómo se calcula el coste de adquisición y los tipos de coste de almacenamiento, sobre todo según su actividad.",
+esquema: [
+ {k:"tabla", t:"Los costes del producto", cab:["Coste","Qué es"], filas:[
+   ["Coste de adquisición","La compra de materias primas y materiales + los gastos hasta tenerlos disponibles en las instalaciones."],
+   ["Coste de almacenamiento o de posesión","Lo que cuesta <b>mantener y conservar</b> los productos en el almacén."],
+   ["Coste de fabricación","Las operaciones de <b>transformación</b> de materias primas en productos terminados."]
+ ]},
+ {k:"formula", t:"Coste de adquisición", f:"Coste de adquisición = Importe bruto (unidades × precio) − descuentos + gastos de compra", nota:"Coste unitario = coste de adquisición total ÷ unidades compradas."},
+ {k:"flujo", t:"Orden de los descuentos (cada uno sobre el importe que deja el anterior)", pasos:[
+   "<b>Descuento comercial</b>: por la relación con el cliente; sobre el importe bruto.",
+   "<b>Descuento por volumen o rappel</b>: por comprar un volumen determinado; sobre el importe ya descontado el comercial.",
+   "<b>Descuento por pronto pago</b>: por pagar al contado o antes de plazo; sobre el importe tras los demás descuentos."
+ ]},
+ {k:"claves", t:"Gastos de compra (se SUMAN si los paga el comprador y no van en el precio)", items:[
+   ["Transporte","Porte o flete según el medio. Incluye carga, descarga y manipulación."],
+   ["Seguro","Cubre roturas, deterioros, pérdidas o accidentes desde el origen hasta el almacén."],
+   ["Envases y embalajes","Solo los <b>no retornables</b>. Los que se devuelven al proveedor <b>no</b> cuentan."],
+   ["Aranceles y otros tributos","Aranceles de compras de fuera de la UE. El <b>IVA solo si no es deducible</b>; su base es el importe tras descuentos y gastos."]
+ ]},
+ {k:"tabla", t:"Caso Bodegas Rio: botella de vidrio (5.000 uds a 10 €)", cab:["Concepto","Importe"], filas:[
+   ["Importe bruto (5.000 × 10 €)","50.000 €"],
+   ["− Descuento comercial 10 %","45.000 €"],
+   ["− Descuento por volumen 2 %","44.100 €"],
+   ["+ Transporte (900 + 190 + 250 de carga y descarga)","1.340 €"],
+   ["+ Seguro / embalaje / aranceles","200 € / 100 € / 1.500 €"],
+   ["Coste total de adquisición","47.240 €"],
+   ["Coste unitario (47.240 ÷ 5.000)","9,45 €"]
+ ]},
+ {k:"texto", t:"El coste de almacenamiento", p:"También se llama <b>coste de mantenimiento o de posesión del stock</b>. Son todos los gastos por mantener y conservar los productos en el almacén: gastos operativos, costes financieros de las existencias, seguros, deterioros y pérdidas. El objetivo es almacenar con el <b>menor coste posible</b>, midiendo y controlando cada coste."},
+ {k:"vs", t:"Clasificaciones del coste de almacenamiento",
+  a:{t:"Según el nivel de actividad (útil para presupuestos)", items:["<b>Fijos</b>: existen por estar en funcionamiento; no dependen de la cantidad almacenada. Ej.: mantenimiento.","<b>Variables</b>: cambian con la actividad y la cantidad almacenada. Ej.: manutención."]},
+  b:{t:"Según su imputabilidad al producto (útil para la rentabilidad)", items:["<b>Directos</b>: se asignan claramente a una operación, proceso o producto.","<b>Indirectos</b> o gastos generales: afectan a toda la empresa (seguros, vigilancia, alquileres, material de oficina, suministros, mobiliario). Se reparten con <b>reglas de reparto</b>."]}},
+ {k:"tabla", t:"Claves de reparto (inductores o cost drivers)", cab:["Clave de reparto","Coste indirecto que reparte"], filas:[
+   ["m³ ocupados por el departamento o actividad","Edificios, alquileres"],
+   ["Número de trabajadores","Sueldos asociados, Seguridad Social a cargo de la empresa"],
+   ["Potencia instalada (kW)","Luz"],
+   ["Inversión en maquinaria","Depreciación y seguro de maquinaria"]
+ ]},
+ {k:"tabla", t:"Costes según su actividad (la clasificación más útil para controlar el presupuesto)", cab:["Coste","Qué incluye"], filas:[
+   ["Almacenaje o de infraestructuras","Uso del <b>espacio</b>: alquiler del local; amortización, reparación, seguros, impuestos, financiación y energía de los <b>medios fijos</b> (edificios, estanterías)."],
+   ["Manutención","<b>Manipulación</b> de la mercancía: personal que manipula; amortización o alquiler, financiación, reparaciones y energía de los <b>medios móviles</b>."],
+   ["Preparación de pedidos (picking)","Personal de picking, medios móviles para preparar pedidos, envases y embalajes (de un uso o reutilizables), energía."],
+   ["Administración y gestión","Personal administrativo, dirección y servicios generales (limpieza, vigilancia, climatización)."],
+   ["Coste de los stocks","Coste de adquisición de lo almacenado + coste de almacenamiento unitario + <b>coste de oportunidad</b> del dinero invertido."],
+   ["Costes ocultos","No previstos: deterioros, roturas, pérdidas, robos, diferencias de inventario, gestión ineficiente de pedidos (devoluciones, retrasos)."]
+ ]},
+ {k:"formula", t:"Cuota de amortización (método de cuota fija o lineal)", f:"Cuota anual = (Coste de adquisición − Valor residual) ÷ Años de vida útil", nota:"Caso Bodegas Rio: estantería de 10.000 €, valor residual 800 €, 15 años → (10.000 − 800) ÷ 15 = 613,33 € al año."},
+ {k:"ojo", items:[
+   "Descuentos: comercial → rappel → pronto pago, cada uno sobre lo que queda.",
+   "Los gastos de compra se suman; los envases <b>retornables</b> no cuentan.",
+   "IVA: solo es coste si <b>no es deducible</b>.",
+   "Medios <b>fijos</b> (edificio, estanterías) → coste de <b>almacenaje</b>. Medios <b>móviles</b> (carretillas) → <b>manutención</b> o picking.",
+   "Financiación con fondos propios = <b>coste de oportunidad</b>; con crédito = intereses bancarios.",
+   "Inmologística: alquilar instalaciones industriales a otras empresas para que optimicen costes. EAE: reducir costes actuando sobre instalaciones, personal, tecnología y proveedores."
+ ]}
+],
+flash: [
+ ["¿Qué tres costes forman el coste de un producto fabricado?","Adquisición, almacenamiento (o posesión) y fabricación."],
+ ["Fórmula del coste de adquisición","Importe bruto (unidades × precio) − descuentos + gastos de compra."],
+ ["Orden de aplicación de los descuentos","1.º comercial (sobre el bruto), 2.º rappel o volumen, 3.º pronto pago, cada uno sobre el importe que deja el anterior."],
+ ["¿Qué es un rappel?","Un descuento por volumen de compras."],
+ ["Los cuatro grupos de gastos de compra","Transporte, seguro, envases y embalajes no retornables, y aranceles y otros tributos."],
+ ["¿Cuentan los envases retornables en el coste de adquisición?","No: solo los no retornables."],
+ ["¿Cuándo se incluye el IVA en el coste de adquisición?","Solo cuando no es deducible. Su base es el importe tras descuentos y gastos."],
+ ["Otros nombres del coste de almacenamiento","Coste de mantenimiento o de posesión del stock."],
+ ["Costes fijos vs variables","Fijos: no dependen de la cantidad almacenada (mantenimiento). Variables: cambian con la actividad (manutención)."],
+ ["Costes directos vs indirectos","Directos: se asignan a un producto o proceso. Indirectos (gastos generales): afectan a toda la empresa y se reparten con claves de reparto."],
+ ["¿Qué son las claves de reparto o cost drivers?","Inductores que reparten los costes indirectos: m³ ocupados, nº de trabajadores, potencia instalada (kW), inversión en maquinaria."],
+ ["Coste de almacenaje","El del uso del espacio: alquiler y los medios de almacenaje fijos (edificios, estanterías)."],
+ ["Coste de manutención","El de manipular la mercancía: personal y medios de almacenaje móviles."],
+ ["Coste de los stocks","Coste de adquisición + coste de almacenamiento unitario + coste de oportunidad."],
+ ["Costes ocultos","Deterioros, roturas, pérdidas, robos, diferencias de inventario y gestión ineficiente de pedidos."],
+ ["Fórmula de la cuota de amortización lineal","(Coste de adquisición − valor residual) ÷ años de vida útil."],
+ ["¿Qué es la inmologística?","Negocios que alquilan instalaciones industriales a otras empresas para que optimicen costes."]
+],
+test: [
+ {p:"El coste de un producto fabricado en la empresa se compone de…", o:["Coste de adquisición, de almacenamiento y de fabricación","Coste de venta, de marketing y de transporte","Solo el precio de compra","Coste fijo y coste de oportunidad"], c:0, e:"Adquisición (compra), almacenamiento o posesión (mantenerlo) y fabricación (transformarlo)."},
+ {p:"El coste de almacenamiento también se conoce como…", o:["Coste de mantenimiento o de posesión del stock","Coste de fabricación","Coste de adquisición","Coste de ruptura"], c:0, e:"Son los gastos por mantener y conservar los productos en el almacén."},
+ {p:"¿Sobre qué importe se aplica el descuento comercial?", o:["Sobre el importe bruto facturado","Sobre el importe tras el pronto pago","Sobre el importe con IVA","Sobre los gastos de transporte"], c:0, e:"Es el primero: se aplica al importe bruto (unidades × precio)."},
+ {p:"El rappel sobre compras es un descuento…", o:["Por volumen de compras","Por pagar al contado","Por la relación comercial con el cliente","Por devolver los envases"], c:0, e:"Se da por comprar un volumen determinado y se aplica tras el descuento comercial."},
+ {p:"El descuento por pronto pago se aplica…", o:["Tras descontar el resto de descuentos","Antes que el descuento comercial","Sobre los gastos de compra","Sobre el IVA"], c:0, e:"Es el último: comercial → rappel → pronto pago."},
+ {p:"En el coste de adquisición, los gastos de compra…", o:["Se suman si corren por cuenta del comprador y no van en el precio","Se restan siempre","No se tienen en cuenta","Solo se suman si los paga el proveedor"], c:0, e:"Al importe bruto se le restan los descuentos y se le suman los gastos de compra a cargo del comprador."},
+ {p:"¿Cuál NO forma parte de los gastos de compra?", o:["Envases y embalajes retornables","Transporte","Seguro de la mercancía","Aranceles"], c:0, e:"Los envases que se devuelven al proveedor no cuentan como gasto; solo los no retornables."},
+ {p:"El IVA se incluye en el coste de adquisición…", o:["Solo si no es deducible por el empresario","Siempre","Nunca","Solo en compras dentro de la UE"], c:0, e:"Su base imponible es el importe tras descuentos y con todos los gastos añadidos."},
+ {p:"El porte o flete es un gasto de…", o:["Transporte","Seguro","Embalaje","Administración"], c:0, e:"Recibe un nombre u otro según el medio de transporte e incluye carga, descarga y manipulación."},
+ {p:"En el caso de Bodegas Rio (5.000 botellas a 10 €, 10 % comercial, 2 % volumen y 3.140 € de gastos), el coste unitario es…", o:["9,45 €","10 €","8,82 €","9,00 €"], c:0, e:"50.000 → 45.000 → 44.100; + 3.140 = 47.240 €; ÷ 5.000 = 9,45 €."},
+ {p:"Los costes que no dependen de la cantidad de productos almacenada son…", o:["Fijos","Variables","Directos","Ocultos"], c:0, e:"Existen por estar en funcionamiento. Ejemplo: los costes de mantenimiento."},
+ {p:"Los costes de manutención son, según el nivel de actividad, un ejemplo de coste…", o:["Variable","Fijo","Oculto","De fabricación"], c:0, e:"Varían con la actividad del almacén y la cantidad almacenada."},
+ {p:"Los costes que afectan a la empresa en su conjunto y se reparten con claves de reparto son…", o:["Indirectos","Directos","Variables","De adquisición"], c:0, e:"Se llaman también gastos generales: seguros, vigilancia, alquileres, suministros…"},
+ {p:"¿Qué clave de reparto se usa normalmente para repartir el alquiler del edificio?", o:["Los m³ ocupados por cada actividad","La potencia instalada (kW)","La inversión en maquinaria","El número de pedidos"], c:0, e:"m³ → edificios y alquileres; trabajadores → sueldos; kW → luz; inversión → maquinaria."},
+ {p:"El coste de la luz se reparte normalmente según…", o:["La potencia instalada (kW)","El número de trabajadores","Los m³ ocupados","La inversión en maquinaria"], c:0, e:"Depende del consumo de suministros de cada actividad."},
+ {p:"Las claves de reparto también se conocen como…", o:["Inductores o cost drivers","Rappels","Costes ocultos","Valores residuales"], c:0, e:"Son variables o sucesos que provocan costes por el uso de los recursos."},
+ {p:"¿Qué clasificación es la más útil para controlar el presupuesto del almacén?", o:["En función de su actividad","En función de su imputabilidad","Fijos y variables","Directos e indirectos"], c:0, e:"Permite saber en qué actividad se produce cada coste."},
+ {p:"El alquiler del local y la amortización de las estanterías son costes de…", o:["Almacenaje","Manutención","Preparación de pedidos","Administración"], c:0, e:"El coste de almacenaje (o de infraestructuras) es el del uso del espacio y los medios fijos."},
+ {p:"La amortización de una carretilla elevadora usada para mover mercancía es un coste de…", o:["Manutención","Almacenaje","Administración y gestión","Costes ocultos"], c:0, e:"Los medios de almacenaje móviles y el personal que manipula van a manutención."},
+ {p:"El sueldo del personal de limpieza y vigilancia del almacén es un coste de…", o:["Administración y gestión","Manutención","Preparación de pedidos","Almacenaje"], c:0, e:"Incluye personal administrativo, dirección y servicios generales (limpieza, vigilancia, climatización)."},
+ {p:"El coste de los envases y embalajes para preparar pedidos va en…", o:["Costes de preparación de pedidos (picking)","Costes de almacenaje","Costes ocultos","Coste de fabricación"], c:0, e:"Tanto los de un solo uso como los reutilizables, comprados o alquilados."},
+ {p:"El coste de oportunidad por el dinero invertido en las existencias forma parte del…", o:["Coste de los stocks","Coste de manutención","Coste oculto","Coste de administración"], c:0, e:"Coste de los stocks = adquisición + almacenamiento unitario + coste de oportunidad."},
+ {p:"Las roturas, los robos y las diferencias de inventario son…", o:["Costes ocultos","Costes de almacenaje","Costes fijos","Gastos de compra"], c:0, e:"No se prevén, pero afectan al valor real de los productos almacenados."},
+ {p:"Si una estantería se compra con fondos propios, su financiación aparece como…", o:["Coste de oportunidad","Intereses bancarios","Arancel","Rappel"], c:0, e:"Con crédito serían intereses bancarios; con fondos propios, coste de oportunidad."},
+ {p:"La cuota de amortización lineal se calcula como…", o:["(Coste de adquisición − valor residual) ÷ años de vida útil","Coste de adquisición × años de vida útil","Valor residual ÷ coste de adquisición","(Coste + valor residual) ÷ años"], c:0, e:"Caso Bodegas Rio: (10.000 − 800) ÷ 15 = 613,33 €/año."},
+ {p:"La inmologística consiste en…", o:["Alquilar instalaciones industriales a otras empresas para que optimicen costes","Comprar inmuebles para vivir","Un tipo de descuento comercial","Un software de almacén"], c:0, e:"Es una tendencia para reducir costes de almacenamiento."}
+],
+ejercicios: [
+ {p:"Una empresa compra 2.000 unidades a 15 €/ud. Condiciones: descuento comercial 5 %, rappel 3 % y pronto pago 2 %. Gastos a su cargo: transporte 600 €, seguro 150 € y embalajes no retornables 250 €. ¿Cuál es el coste total de adquisición?", r:28092.10, dec:2, u:"€", pasos:["Importe bruto: 2.000 × 15 = 30.000 €.","Comercial 5 %: 30.000 × 0,95 = 28.500 €.","Rappel 3 %: 28.500 × 0,97 = 27.645 €.","Pronto pago 2 %: 27.645 × 0,98 = 27.092,10 €.","+ gastos: 600 + 150 + 250 = 1.000 €.","Coste total = <b>28.092,10 €</b>."]},
+ {p:"Con los datos del ejercicio anterior (coste total 28.092,10 € por 2.000 unidades), ¿cuál es el coste de adquisición unitario?", r:14.05, dec:2, u:"€/ud", pasos:["Coste unitario = coste total ÷ unidades.","28.092,10 ÷ 2.000 = 14,046 → <b>14,05 €/ud</b>."]},
+ {p:"Se compran 1.000 unidades a 8 €/ud con un descuento comercial del 10 %. Gastos: transporte 300 €, envases retornables 200 € (se devuelven al proveedor) y aranceles 500 €. ¿Cuál es el coste unitario de adquisición?", r:8, dec:2, u:"€/ud", pasos:["Importe bruto: 1.000 × 8 = 8.000 €. Comercial 10 %: 7.200 €.","Gastos: transporte 300 + aranceles 500 = 800 €. Los envases <b>retornables no cuentan</b>.","Total: 7.200 + 800 = 8.000 €.","Unitario: 8.000 ÷ 1.000 = <b>8 €/ud</b>."]},
+ {p:"Bodegas Rio compra una estantería por 10.000 €, con un valor residual de 800 € y una vida útil de 15 años. ¿Cuál es la cuota de amortización anual (método lineal)?", r:613.33, dec:2, u:"€/año", pasos:["Cuota = (coste − valor residual) ÷ vida útil.","(10.000 − 800) ÷ 15 = 9.200 ÷ 15 = <b>613,33 €/año</b>.","Es un coste de <b>almacenaje</b> (medio fijo)."]},
+ {p:"Una estantería cuesta 18.000 €, tiene un valor residual de 1.500 € y una vida útil de 10 años. ¿Cuál es la cuota de amortización anual?", r:1650, dec:2, u:"€/año", pasos:["(18.000 − 1.500) ÷ 10 = 16.500 ÷ 10 = <b>1.650 €/año</b>.","Va a costes de <b>almacenaje</b>."]},
+ {p:"Una carretilla elevadora cuesta 24.000 €, su valor residual es de 4.000 € y su vida útil de 8 años. ¿Cuál es la cuota de amortización anual y a qué coste se imputa?", r:2500, dec:2, u:"€/año", pasos:["(24.000 − 4.000) ÷ 8 = 20.000 ÷ 8 = <b>2.500 €/año</b>.","Es un medio de almacenaje <b>móvil</b> → coste de <b>manutención</b>."]},
+ {p:"El alquiler del almacén cuesta 12.000 € al año y se reparte por m³ ocupados: almacenaje 600 m³, preparación de pedidos 300 m³ y administración 100 m³. ¿Cuánto alquiler se imputa a preparación de pedidos?", r:3600, dec:2, u:"€", pasos:["Clave de reparto: m³ ocupados. Total: 600 + 300 + 100 = 1.000 m³.","Preparación de pedidos: 300 ÷ 1.000 = 30 %.","12.000 × 0,30 = <b>3.600 €</b>."]},
+ {p:"<b>Caso práctico.</b> Clasifica según su actividad: (a) alquiler del almacén; (b) sueldo de los carretilleros; (c) cajas para enviar pedidos; (d) sueldo del jefe de almacén y de la limpieza; (e) mercancía robada; (f) coste de oportunidad del dinero invertido en existencias; (g) mantenimiento de las estanterías.", pasos:["(a) <b>Almacenaje</b> (uso del espacio).","(b) <b>Manutención</b> (personal que manipula).","(c) <b>Preparación de pedidos</b> (envases y embalajes).","(d) <b>Administración y gestión</b> (dirección y servicios generales).","(e) <b>Coste oculto</b>.","(f) <b>Coste de los stocks</b>.","(g) <b>Almacenaje</b> (reparación y mantenimiento de medios fijos)."]}
+],
+cortas: [
+ {p:"¿Cómo se calcula el coste de adquisición de un producto?", r:"Se parte del <b>importe bruto</b> (unidades × precio unitario), se le <b>restan los descuentos</b> en orden (comercial, rappel o volumen y pronto pago, cada uno sobre lo que deja el anterior) y se le <b>suman los gastos de compra</b> a cargo del comprador: transporte, seguro, envases y embalajes no retornables, y aranceles y otros tributos (el IVA solo si no es deducible). El unitario es el total ÷ unidades.", k:["importe bruto","restar descuentos en orden","sumar gastos de compra","IVA solo si no es deducible","unitario = total ÷ unidades"]},
+ {p:"Explica los tipos de coste de almacenamiento según el nivel de actividad y según su imputabilidad.", r:"Según el <b>nivel de actividad</b>: <b>fijos</b> (no dependen de la cantidad almacenada, como el mantenimiento) y <b>variables</b> (cambian con la actividad, como la manutención). Según su <b>imputabilidad</b>: <b>directos</b> (se asignan a un producto o proceso) e <b>indirectos</b> o gastos generales (afectan a toda la empresa y se reparten con claves de reparto).", k:["fijos","variables","directos","indirectos","claves de reparto"]},
+ {p:"¿Qué costes de almacenamiento hay según su actividad?", r:"<b>Almacenaje</b> (uso del espacio y medios fijos), <b>manutención</b> (manipulación: personal y medios móviles), <b>preparación de pedidos</b> (picking, envases y embalajes), <b>administración y gestión</b> (personal administrativo, dirección, servicios generales), <b>coste de los stocks</b> (adquisición + almacenamiento unitario + coste de oportunidad) y <b>costes ocultos</b> (roturas, robos, diferencias de inventario…).", k:["almacenaje","manutención","preparación de pedidos","administración","stocks","ocultos"]}
+]
 });
 ESTUDIO.extra("logistica", {
  1:{cortas:[
