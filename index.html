@@ -6012,6 +6012,8 @@ ESTUDIO.extra("comercio", {
   {p:"<b>Caso práctico.</b> Clasifica cada acción en un tipo de marketing de contenidos: (a) un chatbot que resuelve dudas por WhatsApp en tiempo real; (b) un vídeo creativo pensado para que se comparta en horas; (c) emails con recomendaciones según las compras de cada cliente; (d) un microinfluencer gamer que prueba tus auriculares.", pasos:["(a) <b>Conversacional</b>: diálogo personalizado en tiempo real.","(b) <b>Viral</b>: creativo, boca a boca, mensaje claro y simple.","(c) <b>One-to-one</b>: experiencia individual a partir de los datos del cliente.","(d) <b>Influencers</b>: credibilidad de una persona influyente."]}
  ]}
 });
+/* Logística: el examen no tiene preguntas cortas, así que se quitan de todos los temas */
+(DATA.logistica?.temas||[]).forEach(t=>{ delete t.cortas; });
 /* ---------- Fin práctica extra ---------- */
 function arrancar(){ estado=leerHash(); render(); }
 ASIGNATURAS.forEach(a=>{ if(!DATA[a.id]) a.listo=false; });
