@@ -659,10 +659,10 @@ function ir(h){ if(location.hash==='#'+h || (!h && !location.hash)) render(); el
 function leerHash(){
   const h = location.hash.replace('#','');
   if(!h) return {vista:'inicio'};
-  const m = h.match(/^([a-z]+)(?:-(t\d+|simulacro|fallos|repaso|writing))?$/);
+  const m = h.match(/^([a-z]+)(?:-(t\d+|simulacro|fallos|repaso|writing|glossary|tipotest|desarrollo))?$/);
   if(!m || !asig(m[1])) return {vista:'inicio'};
   if(!m[2]) return {vista:'asig', sid:m[1]};
-  if(m[2][0]==='t') return {vista:'tema', sid:m[1], tema:Number(m[2].slice(1))};
+  if(/^t\d+$/.test(m[2])) return {vista:'tema', sid:m[1], tema:Number(m[2].slice(1))};
   return {vista:m[2], sid:m[1]};
 }
 window.addEventListener('hashchange', ()=>{ estado=leerHash(); vt(render,'vt-ruta'); });
@@ -688,6 +688,9 @@ function render(){
   else if(e.vista==='writing') vistaWriting(e.sid);
   else if(e.vista==='fallos') vistaQuiz(e.sid,'fallos');
   else if(e.vista==='repaso') vistaFlashAll(e.sid);
+  else if(e.vista==='glossary') vistaGlossary(e.sid);
+  else if(e.vista==='tipotest') vistaTipoTest(e.sid);
+  else if(e.vista==='desarrollo') vistaDesarrollo(e.sid);
   window.scrollTo(0,0);
 }
 
@@ -746,7 +749,7 @@ function vistaAsig(sid){
     <button class="btn" onclick="ir('${sid}-repaso')">Todas las tarjetas</button>
   </div>
   ${conEx.length?`<details class="exban" open><summary><b>Lo que entra en el examen (indicado por la profesora)</b></summary><div class="exgrid" style="margin-top:8px">${conEx.map(t=>`<div><b>Tema ${t.n}</b><ul>${t.examen.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`).join('')}</div></details>`:''}
-  <div class="grid">${cards}</div>${pie()}`;
+  ${d.secciones? seccionesHTML(sid):''}<div class="grid">${cards}</div>${pie()}`;
 }
 
 /* ---------- Tema ---------- */
@@ -754,7 +757,7 @@ let tabActual='esquema';
 function vistaTema(sid,n){
   const a=asig(sid), d=DATA[sid], t=d.temas.find(x=>x.n===n); setAcc(sid);
   if(!t) return ir(sid);
-  const tabs=[['esquema','Esquema'],['flash','Tarjetas'],['test','Test']]; if(t.cortas?.length) tabs.push(['cortas','Preguntas cortas']); if(t.ejercicios?.length) tabs.push(['ejer','Ejercicios']);
+  const tabs=[['esquema','Esquema'],['flash','Tarjetas']]; if(!d.sinTestTema) tabs.push(['test','Test']); if(t.cortas?.length) tabs.push(['cortas','Preguntas cortas']); if(t.ejercicios?.length) tabs.push(['ejer','Ejercicios']);
   if(!tabs.find(x=>x[0]===tabActual)) tabActual='esquema';
   const prev=d.temas.find(x=>x.n===n-1), next=d.temas.find(x=>x.n===n+1);
   app.innerHTML = topbar(`<button onclick="ir('')">Inicio</button><span>/</span><button onclick="ir('${sid}')">${esc(a.nombre)}</button><span>/</span><span>Tema ${n}</span>`) + `
@@ -1047,7 +1050,7 @@ function vistaExamen(sid){
   // Formato del examen: nº de preguntas y puntos de cada parte (por defecto 20 test · 5 cortas · 2 ejercicios = 3 + 3 + 4)
   const F={nt:20, nc:5, ne:2, pt:3, pc:3, pe:4, ...(d.simulacro?.formato||{})};
   // Parte 1: 20 preguntas tipo test (prioriza las de los puntos de examen si existen)
-  const todas=todasPreguntas(sid).filter(q=>!fueraSim(d,q.tema)), xs=todas.filter(q=>q.x), resto=todas.filter(q=>!q.x);
+  const todas=todasPreguntas(sid).concat(d.glosario? shuffle(preguntasGlosario()).slice(0, todasPreguntas(sid).length) : []).filter(q=>!fueraSim(d,q.tema)), xs=todas.filter(q=>q.x), resto=todas.filter(q=>!q.x);
   let test;
   if(xs.length>=8 && !F.mix){ const nx=Math.min(Math.round(F.nt*0.75), xs.length); test=repartir(xs,nx).concat(repartir(resto, F.nt-nx)); }
   else test=repartir(todas, F.nt);
@@ -5787,6 +5790,334 @@ ESTUDIO.extra("ingles", {
   {p:"<b>Grammar.</b> Clasifica en gusto positivo o negativo: I'm very fond of, I'm not really into, I'd rather, I dislike, I enjoy, I'm not interested in.", pasos:["Positivo: <b>I'm very fond of, I'd rather, I enjoy</b>.","Negativo: <b>I'm not really into, I dislike, I'm not interested in</b>."]}
  ]}
 });
+const GLOSARIO_INGLES = [[1, "Annual accounts", "The accounting documents that show the financial information of a company every twelve months.", "Cuentas anuales"],
+[1, "Real estate investing", "Buying, managing, selling or renting buildings and land to make money.", "Inversión inmobiliaria"],
+[1, "Fair value", "The price paid for an asset or a liability in a normal transaction.", "Valor razonable"],
+[1, "Amortized cost", "The part of the cost of a fixed asset that has been counted as an expense through depreciation or amortization.", "Coste amortizado"],
+[1, "Deductible expenses", "Costs related to the business activity that a company can take away from its income to pay less tax.", "Gastos deducibles"],
+[1, "Etiquette", "The rules of polite behaviour in a society or group.", "Etiqueta / protocolo"],
+[1, "Custom", "A traditional way of behaving in a particular society or place.", "Costumbre"],
+[1, "To bow", "To bend your body forward from the waist to greet or show respect.", "Hacer una reverencia"],
+[1, "To greet", "To say hello to someone when you meet them.", "Saludar"],
+[1, "To shake hands", "To hold someone's hand and move it up and down when you meet or say goodbye.", "Dar la mano"],
+[1, "Handshake (firm / soft)", "The act of shaking hands. It can be strong (firm) or gentle (soft).", "Apretón de manos (firme / suave)"],
+[1, "Polite", "Behaving in a way that is respectful to other people.", "Educado / cortés"],
+[1, "Formal / informal register", "The style of language: formal is for clients or people you don't know, informal is for friends and family.", "Registro formal / informal"],
+[1, "Good morning / afternoon / evening", "Polite greetings for different times of the day.", "Buenos días / Buenas tardes / Buenas noches"],
+[1, "How are you?", "A question to ask how someone is. Answer: Fine, thanks, and you?", "¿Cómo estás?"],
+[1, "Nice to meet you", "Said when you meet someone for the first time. Answer: You too.", "Encantado de conocerte"],
+[1, "May I introduce myself?", "A formal way to start telling someone your name.", "¿Me permite presentarme?"],
+[1, "Pleased to meet you / It's a pleasure to meet you", "Formal ways to say you are happy to meet someone.", "Encantado de conocerle / Es un placer"],
+[1, "What's up? / What's new? / How's it going?", "Informal ways to say hello and ask how someone is.", "¿Qué tal? / ¿Qué hay de nuevo? / ¿Cómo va?"],
+[1, "See you next week / Have a good day", "Neutral ways to say goodbye.", "Nos vemos la semana que viene / Que tengas un buen día"],
+[1, "Thank you for coming / We hope to see you again", "Neutral phrases to say goodbye to a visitor or client.", "Gracias por venir / Esperamos volver a verle"],
+[1, "We look forward to seeing you again", "A formal way to say you want to see someone again.", "Esperamos volver a verle pronto"],
+[1, "You'll always be welcome", "A formal way to say that someone can come back any time.", "Siempre será bienvenido"],
+[1, "See you! / Bye!", "Informal ways to say goodbye.", "¡Nos vemos! / ¡Adiós!"],
+[1, "It's half past / quarter past / quarter to", "Ways to tell the time: 8:30, 8:15, 8:45.", "Son las y media / y cuarto / menos cuarto"],
+[2, "Severance pay", "Money that a company pays to a worker when the job ends.", "Indemnización por despido"],
+[2, "Temporary contract", "A work contract for a limited time. Hours, shifts or days off can change.", "Contrato temporal"],
+[2, "Long-term unemployment", "The situation of people who have not had a job for 12 months or more.", "Desempleo de larga duración"],
+[2, "Occupational risk", "The possibility that a worker has an injury or illness because of the job.", "Riesgo laboral"],
+[2, "Underground economy / Shadow economy", "Economic activities that are hidden from the tax authorities.", "Economía sumergida"],
+[2, "Full-time", "Working the complete number of hours of a normal working week.", "A jornada completa"],
+[2, "Part-time", "Working fewer hours than a normal working week.", "A media jornada / a tiempo parcial"],
+[2, "Permanent", "A job that is expected to last for a long time or with no end date.", "Fijo / indefinido"],
+[2, "Temporary", "A job that lasts only for a short time.", "Temporal"],
+[2, "Freelance", "Working for different companies at different times, not as a permanent employee.", "Autónomo / freelance"],
+[2, "Per diem", "Paid by the day.", "Por día / por jornada"],
+[2, "To consult", "To ask an expert for advice or information.", "Consultar"],
+[2, "To transition", "To change from one position or situation to another.", "Pasar de una situación a otra"],
+[2, "Job applicant", "A person who asks formally for a job.", "Candidato / solicitante"],
+[2, "Surname / family name", "The name you share with your family.", "Apellido"],
+[2, "Where are you from? / Where do you live?", "Questions to ask about someone's origin and home.", "¿De dónde eres? / ¿Dónde vives?"],
+[2, "Who do you live with?", "A question about the people who share your home.", "¿Con quién vives?"],
+[2, "Free time", "Time when you are not working or studying.", "Tiempo libre"],
+[2, "Phone number / Email address", "The numbers or address you use to contact someone.", "Número de teléfono / Correo electrónico"],
+[2, "Flatmate", "A person who shares a flat with you.", "Compañero de piso"],
+[3, "Surplus", "The money you have left when you receive more than you spend. Excess of resources.", "Superávit / excedente"],
+[3, "Deficit", "When a business spends more money than it receives. Lack of resources.", "Déficit"],
+[3, "Liquidity", "The ability of a company to pay its short- term debts with its current assets.", "Liquidez"],
+[3, "Solvency", "The ability of a person or company to pay its long-term debts.", "Solvencia"],
+[3, "Maturity", "The date when a financial operation must be paid.", "Vencimiento"],
+[3, "Assets", "Things a company owns that have value, like buildings or money.", "Activos"],
+[3, "Expenditure", "An amount of money that is spent.", "Gasto"],
+[3, "Cash balance", "The amount of cash a company has in its account.", "Saldo de caja"],
+[3, "Zero cash balance", "A situation where there is no money in an account.", "Saldo cero"],
+[3, "Safety reserve", "Extra money you keep to pay for unexpected costs.", "Reserva de seguridad / colchón"],
+[3, "Unproductive", "Not producing good results or profit.", "Improductivo"],
+[3, "To buy out", "To buy all of a company or someone's part of it.", "Adquirir / comprar (una empresa)"],
+[3, "Wake up / Get up", "To stop sleeping / to leave your bed.", "Despertarse / Levantarse"],
+[3, "Have breakfast / lunch / dinner", "To eat the meal of the morning / midday / evening.", "Desayunar / Comer / Cenar"],
+[3, "Brush my teeth", "To clean your teeth with a toothbrush.", "Lavarse los dientes"],
+[3, "Have a shower / Get dressed", "To wash your body / to put on your clothes.", "Ducharse / Vestirse"],
+[3, "Go to work / Go home", "To travel to your job / to return to your house.", "Ir a trabajar / Volver a casa"],
+[3, "Do the housework", "To clean and tidy the house.", "Hacer las tareas de casa"],
+[3, "Take a nap", "To sleep for a short time during the day.", "Echarse la siesta"],
+[3, "Do sport / Go to the gym", "To do physical exercise.", "Hacer deporte / Ir al gimnasio"],
+[3, "Go out with friends / Walk the dog", "To meet friends outside / to take the dog for a walk.", "Salir con amigos / Pasear al perro"],
+[3, "Do my homework", "To do the school work for home.", "Hacer los deberes"],
+[3, "Go to bed / Sleep", "To lie in bed to rest / to rest with your eyes closed.", "Acostarse / Dormir"],
+[3, "First, then, after that, next, finally", "Connectors to put actions in order.", "Primero, luego, después, a continuación, por último"],
+[4, "Stock", "The goods a company has stored and ready to sell or distribute.", "Existencias / stock"],
+[4, "Storage", "Keeping and protecting goods in a place for a period of time.", "Almacenamiento"],
+[4, "Supply chain", "All the steps and people that move a product from the supplier to the customer, from the order until it is paid.", "Cadena de suministro"],
+[4, "Periodicity", "How often something happens.", "Periodicidad"],
+[4, "Tracking", "Following the location and route of a product or shipment.", "Seguimiento / rastreo"],
+[4, "To manufacture", "To make products from raw materials, by hand or with machines.", "Fabricar"],
+[4, "Production plan", "A plan that decides what, how and when a company will produce.", "Plan de producción"],
+[4, "Raw materials", "Basic materials used to make a product.", "Materias primas"],
+[4, "To purchase", "To buy something, for example raw materials or a service.", "Comprar / adquirir"],
+[4, "Warehouse", "A big building where goods are stored.", "Almacén"],
+[4, "Delivery", "Goods that are taken to the customer who ordered them.", "Entrega / envío"],
+[4, "Invoice", "A document that lists the products sold, their prices and the terms of sale.", "Factura"],
+[4, "Courier", "A company that delivers packages and documents.", "Mensajería"],
+[4, "Terms of sale", "The conditions agreed for selling a product, like price and payment.", "Condiciones de venta"],
+[4, "Netiquette", "The rules of polite behaviour on the internet.", "Netiqueta"],
+[4, "Abbreviation / Acronym", "A short form of a word / a word made with the first letters of other words.", "Abreviatura / Sigla"],
+[4, "r / u / 2", "are / you / too (or to, two)", "eres, estás / tú / también"],
+[4, "K", "okay", "vale"],
+[4, "Cya / c u l8r", "see you / see you later", "nos vemos / hasta luego"],
+[4, "gr8 / gd", "great / good", "genial / bien"],
+[4, "thx", "thanks", "gracias"],
+[4, "2nite", "tonight", "esta noche"],
+[4, "wbu", "what about you?", "¿y tú?"],
+[4, "fyi", "for your information", "para tu información"],
+[4, "4u", "for you", "para ti"],
+[4, "atb", "all the best", "un saludo / lo mejor"],
+[5, "Interest rate", "The percentage a bank pays you for your money, or that you pay to borrow money.", "Tipo de interés"],
+[5, "To accrue", "To increase or build up over time.", "Acumularse / devengarse"],
+[5, "To transfer", "To move money from one account to another.", "Transferir"],
+[5, "Checking account", "A bank account that lets you write checks and pay with the money in it.", "Cuenta corriente"],
+[5, "Savings account", "A bank account where you keep money and receive interest.", "Cuenta de ahorro"],
+[5, "Overdraft", "When you take out more money than you have in your account.", "Descubierto"],
+[5, "Overdraft fee", "Money the bank charges you when you have an overdraft.", "Comisión por descubierto"],
+[5, "Commercial bank", "A bank that offers services to people and businesses.", "Banco comercial"],
+[5, "Instant messaging", "Sending short messages that arrive immediately through an app.", "Mensajería instantánea"],
+[5, "BFF", "best friends forever", "mejores amigos para siempre"],
+[5, "LOL", "laughing out loud", "me muero de risa"],
+[5, "IMO", "in my opinion", "en mi opinión"],
+[5, "OMG", "oh my God", "¡Dios mío!"],
+[5, "asap", "as soon as possible", "lo antes posible"],
+[5, "@ / b4", "at / before", "en, a / antes"],
+[5, "BTW", "by the way", "por cierto"],
+[5, "fig. / e.g. / i.e.", "figure / for example / that is", "fig. / p. ej. / es decir"],
+[5, "vs", "versus, against", "contra"],
+[5, "XOXO", "kisses and hugs", "besos y abrazos"],
+[5, "cuz", "because", "porque"],
+[6, "Handling company", "A company at the airport that receives, handles and loads goods in air terminals.", "Empresa de handling / asistencia en tierra"],
+[6, "Commercial documents", "Documents about the goods that give information to the operators, for example the packing list, delivery note or invoice.", "Documentos comerciales"],
+[6, "Packing list", "A document that lists everything inside a shipment.", "Lista de bultos / packing list"],
+[6, "Delivery note", "A document that goes with the goods when they are delivered.", "Albarán"],
+[6, "Customs territory", "An area with the same customs rules and no internal customs taxes.", "Territorio aduanero"],
+[6, "Trading bloc", "A group of countries that have an agreement and a common customs policy.", "Bloque comercial"],
+[6, "IRU (International Road Transport Union)", "The world organization of the road transport industry.", "Unión Internacional del Transporte por Carretera"],
+[6, "Logistician", "A person who organizes and coordinates the supply chain of a company.", "Logista / experto en logística"],
+[6, "Supplier", "A company that sells goods or materials to other companies.", "Proveedor"],
+[6, "Distribution", "The process of moving goods from the producer to the customers.", "Distribución"],
+[6, "Fast-paced", "Something that moves very fast or needs quick answers.", "Acelerado / de ritmo rápido"],
+[6, "Now / at the moment / today", "Expressions for the present.", "Ahora / en este momento / hoy"],
+[6, "Every day / on Mondays", "Expressions for things that happen regularly.", "Todos los días / los lunes"],
+[6, "Yesterday / last week / two years ago", "Expressions for the past.", "Ayer / la semana pasada / hace dos años"],
+[6, "Tomorrow / next year", "Expressions for the future.", "Mañana / el año que viene"],
+[6, "In (prepositions of time)", "Used with months, seasons, years and parts of the day: in summer, in the morning.", "En / por"],
+[6, "On (prepositions of time)", "Used with days and dates: on Monday, on September 7th.", "El / los"],
+[6, "At (prepositions of time)", "Used with the time and holidays: at 8:30, at Christmas, at night.", "A / en / por"],
+[6, "In the background", "The part of a picture behind the main things.", "Al fondo"],
+[7, "IATA (International Air Transport Association)", "The international organization of the world's airlines. It represents them and sets standards for safety and processes.", "Asociación Internacional de Transporte Aéreo"],
+[7, "CMR", "The international agreement and document used for transporting goods by road.", "CMR / carta de porte internacional por carretera"],
+[7, "Freight", "Goods transported by truck or train.", "Mercancía / flete"],
+[7, "Cargo", "Goods transported by plane or ship.", "Carga"],
+[7, "Transport Operator (TO)", "A company that works between shippers and carriers.", "Operador de transporte"],
+[7, "Carrier / common carrier", "A company that transports goods for other people or companies.", "Transportista"],
+[7, "Shipper", "A person or company that sends goods.", "Cargador / expedidor"],
+[7, "Shipment", "A load of goods that is sent together.", "Envío / cargamento"],
+[7, "To haul", "To transport a load from one place to another.", "Transportar / acarrear"],
+[7, "Long haul / short haul", "A long trip / a short trip to transport goods.", "Larga distancia / corta distancia"],
+[7, "Truckload / less than truckload", "A load that needs a whole trailer / a load that only needs part of a trailer.", "Carga completa / carga parcial (grupaje)"],
+[7, "Semi-trailer", "The back part of a truck that carries the goods.", "Semirremolque"],
+[7, "Flatbed trailer", "An open trailer with no sides, for very big items.", "Plataforma / remolque plataforma"],
+[7, "Reefer", "A refrigerated trailer for goods that need a low temperature.", "Remolque frigorífico"],
+[7, "Expedited delivery", "A faster delivery, normally with an extra cost.", "Entrega urgente"],
+[7, "Review", "A text where someone gives their opinion about a place, product or service.", "Reseña / crítica"],
+[7, "I like / I love / I prefer / I enjoy", "Expressions to say what you like.", "Me gusta / Me encanta / Prefiero / Disfruto"],
+[7, "I'd rather / I'm very fond of", "I would prefer / I like it very much.", "Preferiría / Me gusta mucho"],
+[7, "I hate / I dislike / I don't like", "Expressions to say what you don't like.", "Odio / No me gusta"],
+[7, "I'm not really into / I'm not interested in", "Expressions to say something is not interesting for you.", "No me va mucho / No me interesa"],
+[7, "I think / I believe / I consider", "Expressions to give your opinion.", "Creo / Pienso / Considero"],
+[7, "In my opinion / From my point of view", "Expressions to start giving your opinion.", "En mi opinión / Desde mi punto de vista"],
+[7, "I'm sure that", "You are certain about something.", "Estoy seguro de que"],
+[7, "I agree / You are right / Absolutely / Definitely", "Expressions to show you have the same opinion.", "Estoy de acuerdo / Tienes razón / Totalmente / Sin duda"],
+[7, "I see your point / I completely share your opinion", "You understand or have the same opinion as someone.", "Entiendo lo que dices / Comparto tu opinión"],
+[7, "I disagree / I think you are wrong", "Expressions to show you have a different opinion.", "No estoy de acuerdo / Creo que te equivocas"],
+[7, "You are partly right, but... / You may be right, but...", "Polite ways to disagree.", "Tienes parte de razón, pero... / Puede que tengas razón, pero..."],
+[7, "I don't see your point / I don't share your opinion", "You don't understand or don't have the same opinion.", "No veo lo que dices / No comparto tu opinión"]];
+/* ---------- Inglés: Glossary, Tipo test y Desarrollo como apartados principales ---------- */
+const UNIDADES_INGLES = {1:"Introductions and daily dialogues",2:"Asking for and giving personal information",3:"Daily routines",4:"Social networks: the netiquette",5:"Instant messaging",6:"The time",7:"Asking for and giving opinions: reviews"};
+if(DATA.ingles){ DATA.ingles.secciones=true; DATA.ingles.sinTestTema=true; DATA.ingles.glosario=GLOSARIO_INGLES; }
+
+// Preguntas tipo test generadas a partir del glosario (dos por término)
+function preguntasGlosario(){
+  const G=GLOSARIO_INGLES, out=[];
+  const distintos=(lista, correcta, k)=>{ const vistos=new Set([correcta.toLowerCase()]); const r=[]; for(const x of shuffle(lista)){ const v=x.toLowerCase(); if(!vistos.has(v)){ vistos.add(v); r.push(x); } if(r.length===k) break; } return r; };
+  G.forEach(([u,term,def,es],i)=>{
+    const mismaU=G.filter(g=>g[0]===u && g[1]!==term), otras=G.filter(g=>g[1]!==term);
+    const dEs=distintos(mismaU.map(g=>g[3]), es, 3); if(dEs.length<3) dEs.push(...distintos(otras.map(g=>g[3]).filter(x=>!dEs.includes(x)), es, 3-dEs.length));
+    out.push({p:`<span class="tag soft">Glossary · Unit ${u}</span><br>What is the Spanish equivalent of <b>${esc(term)}</b>?`, o:[es,...dEs].map(esc), c:0, e:`${esc(term)}: ${esc(def)}`, id:`gl-${i}-es`, tema:u});
+    const dT=distintos(mismaU.map(g=>g[1]), term, 3); if(dT.length<3) dT.push(...distintos(otras.map(g=>g[1]).filter(x=>!dT.includes(x)), term, 3-dT.length));
+    out.push({p:`<span class="tag soft">Glossary · Unit ${u}</span><br>Which word or expression matches this definition? <i>«${esc(def)}»</i>`, o:[term,...dT].map(esc), c:0, e:`${esc(term)} = ${esc(es)}.`, id:`gl-${i}-def`, tema:u});
+  });
+  return out;
+}
+
+function cabSeccion(sid, titulo){
+  const a=asig(sid); setAcc(sid);
+  return topbar(`<button onclick="ir('')">Inicio</button><span>/</span><button onclick="ir('${sid}')">${esc(a.nombre)}</button><span>/</span><span>${titulo}</span>`);
+}
+function seccionesHTML(sid){
+  return `<div class="grid" style="margin-bottom:26px">
+    <button class="tcard" onclick="ir('${sid}-glossary')"><span class="num">APARTADO</span><h3>Glossary</h3><p>Los ${GLOSARIO_INGLES.length} términos del glosario de las units 1-7, con definición y traducción. También en tarjetas.</p></button>
+    <button class="tcard" onclick="ir('${sid}-tipotest')"><span class="num">APARTADO</span><h3>Tipo test</h3><p>Preguntas del glosario y preguntas generales de los 7 temas, con corrección al momento.</p></button>
+    <button class="tcard" onclick="ir('${sid}-desarrollo')"><span class="num">APARTADO</span><h3>Desarrollo</h3><p>3 ejercicios: tabla de verbos irregulares, ordenar oraciones en present perfect y past simple vs past continuous.</p></button>
+  </div><h2 style="margin:0 0 14px">Temas</h2>`;
+}
+
+/* --- Glossary --- */
+let glU=0, glQ='';
+function vistaGlossary(sid){
+  app.innerHTML = cabSeccion(sid,'Glossary')+`<span class="eyebrow">Inglés · Units 1-7</span><h1 style="margin-top:6px">Glossary</h1>
+  <p class="muted" style="margin:8px 0 18px;max-width:70ch">Todos los términos de tu glosario. Filtra por unit o busca una palabra. Con «Practicar con tarjetas» ves el término y das la vuelta para ver la traducción y la definición.</p>
+  <div class="actions"><button class="btn primary" id="glFlash">Practicar con tarjetas</button><button class="btn" onclick="ir('${sid}-tipotest')">Hacer el test del glossary</button></div>
+  <div class="tabs" role="tablist">${[0,1,2,3,4,5,6,7].map(u=>`<button class="tab" role="tab" aria-selected="${u===glU}" data-u="${u}">${u?'Unit '+u:'Todas'}</button>`).join('')}</div>
+  <input id="glBusca" class="gl-busca" type="search" placeholder="Buscar en inglés o en español…" value="${esc(glQ)}" aria-label="Buscar en el glosario">
+  <div id="panel"></div>${pie()}`;
+  const pintar=()=>{
+    const q=glQ.trim().toLowerCase(); const lista=GLOSARIO_INGLES.filter(g=>(!glU||g[0]===glU) && (!q || (g[1]+' '+g[3]+' '+g[2]).toLowerCase().includes(q)));
+    const porU={}; lista.forEach(g=>(porU[g[0]]=porU[g[0]]||[]).push(g));
+    $('#panel').innerHTML = lista.length? Object.keys(porU).map(u=>`<section class="blk"><h3>Unit ${u} · ${UNIDADES_INGLES[u]}</h3><div class="tbl"><table><thead><tr><th>Term</th><th>Definition</th><th>Spanish</th></tr></thead><tbody>${porU[u].map(g=>`<tr><td><b>${esc(g[1])}</b></td><td>${esc(g[2])}</td><td>${esc(g[3])}</td></tr>`).join('')}</tbody></table></div></section>`).join('') : '<div class="empty">No hay ningún término con esa búsqueda.</div>';
+  };
+  app.querySelectorAll('.tab[data-u]').forEach(b=>b.onclick=()=>{ glU=Number(b.dataset.u); vistaGlossary(sid); });
+  $('#glBusca').oninput=e=>{ glQ=e.target.value; pintar(); };
+  $('#glFlash').onclick=()=>{ const lista=GLOSARIO_INGLES.map((g,i)=>({g,i})).filter(x=>!glU||x.g[0]===glU);
+    flashcards($('#panel'), lista.map(({g,i})=>({f:[esc(g[1]), `<b>${esc(g[3])}</b><br><span style="font-size:.9em">${esc(g[2])}</span>`], id:`gl-f${i}`})), ()=>vistaGlossary(sid)); };
+  pintar();
+}
+
+/* --- Tipo test --- */
+let ttModo='mezcla';
+function vistaTipoTest(sid){
+  const d=DATA[sid];
+  const gen=todasPreguntas(sid), glo=preguntasGlosario();
+  const modos={mezcla:['Mezcla',`20 del glossary + 20 de los temas`], glossary:['Glossary',`30 preguntas del glosario (${glo.length} posibles)`], temas:['Temas 1-7',`30 preguntas generales de los 7 temas (${gen.length} posibles)`]};
+  app.innerHTML = cabSeccion(sid,'Tipo test')+`<span class="eyebrow">Inglés · Tipo test</span><h1 style="margin-top:6px">Tipo test</h1>
+  <p class="muted" style="margin:8px 0 18px;max-width:70ch">Preguntas del glossary y preguntas generales de los 7 temas. Cada vez que entras salen preguntas distintas y ves la corrección al momento.</p>
+  <div class="tabs" role="tablist">${Object.entries(modos).map(([k,[l,s]])=>`<button class="tab" role="tab" aria-selected="${k===ttModo}" data-m="${k}" title="${esc(s)}">${l}</button>`).join('')}</div>
+  <p class="muted" style="margin:-8px 0 16px">${modos[ttModo][1]}</p><div id="panel"></div>${pie()}`;
+  app.querySelectorAll('.tab[data-m]').forEach(b=>b.onclick=()=>{ ttModo=b.dataset.m; vistaTipoTest(sid); });
+  const pick=(l,n)=>shuffle(l).slice(0,n);
+  const qs = ttModo==='glossary'? pick(glo,30) : ttModo==='temas'? pick(gen,30) : shuffle(pick(glo,20).concat(pick(gen,20)));
+  quiz($('#panel'), qs, {modo:'tema', clave:`${sid}-tt-${ttModo}`, sid});
+}
+
+/* --- Desarrollo --- */
+const VERBOS_IRR = [
+ ["be","was / were","been",["ser","estar","ser o estar"]],["become","became","become",["convertirse","llegar a ser","hacerse","volverse"]],["begin","began","begun",["empezar","comenzar"]],
+ ["break","broke","broken",["romper","romperse"]],["bring","brought","brought",["traer"]],["build","built","built",["construir"]],["buy","bought","bought",["comprar"]],
+ ["catch","caught","caught",["coger","atrapar","pillar"]],["choose","chose","chosen",["elegir","escoger"]],["come","came","come",["venir"]],["cost","cost","cost",["costar"]],
+ ["do","did","done",["hacer"]],["drink","drank","drunk",["beber"]],["drive","drove","driven",["conducir","manejar"]],["eat","ate","eaten",["comer"]],["fall","fell","fallen",["caer","caerse"]],
+ ["feel","felt","felt",["sentir","sentirse"]],["find","found","found",["encontrar","hallar"]],["fly","flew","flown",["volar"]],["forget","forgot","forgotten",["olvidar"]],
+ ["get","got","got / gotten",["conseguir","obtener","llegar","recibir"]],["give","gave","given",["dar"]],["go","went","gone",["ir"]],["have","had","had",["tener","haber"]],
+ ["hear","heard","heard",["oír"]],["keep","kept","kept",["guardar","mantener","quedarse"]],["know","knew","known",["saber","conocer"]],["leave","left","left",["dejar","irse","salir","marcharse"]],
+ ["lend","lent","lent",["prestar"]],["lose","lost","lost",["perder"]],["make","made","made",["hacer","fabricar"]],["meet","met","met",["conocer","quedar","encontrarse","reunirse"]],
+ ["pay","paid","paid",["pagar"]],["put","put","put",["poner","colocar"]],["read","read","read",["leer"]],["ring","rang","rung",["llamar","sonar"]],["run","ran","run",["correr"]],
+ ["say","said","said",["decir"]],["see","saw","seen",["ver"]],["sell","sold","sold",["vender"]],["send","sent","sent",["enviar","mandar"]],["sing","sang","sung",["cantar"]],
+ ["sit","sat","sat",["sentarse","estar sentado"]],["sleep","slept","slept",["dormir"]],["speak","spoke","spoken",["hablar"]],["spend","spent","spent",["gastar","pasar"]],
+ ["swim","swam","swum",["nadar"]],["take","took","taken",["coger","tomar","llevar"]],["teach","taught","taught",["enseñar"]],["tell","told","told",["decir","contar"]],
+ ["think","thought","thought",["pensar","creer"]],["understand","understood","understood",["entender","comprender"]],["wake","woke","woken",["despertar","despertarse"]],
+ ["wear","wore","worn",["llevar puesto","vestir","llevar"]],["win","won","won",["ganar"]],["write","wrote","written",["escribir"]]
+];
+const PRES_PERF = [
+ ["I have never been to London","."],["She has already sent the invoice",".",["She has sent the invoice already"]],["Have you ever worked in a warehouse","?"],
+ ["We haven't received the delivery yet","."],["They have just signed the contract","."],["He has lived in Madrid for five years",".",["He has lived for five years in Madrid"]],
+ ["Has the shipment arrived yet","?"],["I have known my flatmate since 2020","."],["The company has opened a new office","."],["Have you finished your homework","?"],
+ ["She has worked here since January","."],["We have visited three suppliers this week",".",["This week we have visited three suppliers"]],["I have read many reviews about this hotel","."],
+ ["They have never travelled by plane","."],["Has he paid the invoice","?"],["I have just had breakfast","."],["The price of raw materials has gone up","."],
+ ["Have you ever eaten sushi","?"],["We have already loaded the truck",".",["We have loaded the truck already"]],["My boss hasn't answered my email yet","."]
+];
+// {correcta|incorrecta}
+const PAST_SC = [
+ "I {was having|had} a shower when the phone {rang|was ringing}.","While we {were driving|drove} to work, it {started|was starting} to rain.",
+ "She {was cooking|cooked} dinner when I {arrived|was arriving}.","Yesterday I {went|was going} to the gym after work.",
+ "At 8 o'clock last night they {were watching|watched} a film.","He {broke|was breaking} his leg while he {was skiing|skied}.",
+ "We {visited|were visiting} our supplier in China last year.","What {were you doing|did you do} at 10 pm yesterday?",
+ "When the delivery {arrived|was arriving}, I {was talking|talked} to a client.","I {didn't go|wasn't going} out last weekend.",
+ "The sun {was shining|shone} and the birds {were singing|sang} when I woke up.","She {sent|was sending} the invoice two days ago.",
+ "While I {was studying|studied}, my flatmate {was playing|played} video games.","They {met|were meeting} at a trade fair in 2019.",
+ "I {saw|was seeing} an accident while I {was walking|walked} to the office.","Where {did you go|were you going} on holiday last summer?",
+ "The truck {was waiting|waited} at the warehouse when the manager {called|was calling}.","We {finished|were finishing} the project last Friday.",
+ "My phone {rang|was ringing} three times during the meeting.","It {was snowing|snowed} when we {left|were leaving} the hotel.",
+ "He {didn't answer|wasn't answering} because he {was sleeping|slept}.","Last month the company {hired|was hiring} two new logisticians."
+];
+const normTxt = s=>String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[’]/g,"'").replace(/\s+/g,' ').trim();
+let desEj=null;
+function nuevoDes(){ desEj={
+  verbos: shuffle(VERBOS_IRR).slice(0,10).map(v=>({v, dada:Math.floor(Math.random()*4)})),
+  frases: shuffle(PRES_PERF).slice(0,5).map(f=>({f, fichas:shuffle(f[0].split(' ').map((w,i)=>({w,i}))), sel:[]})),
+  pasado: shuffle(PAST_SC).slice(0,8).map(s=>{ const huecos=[]; s.replace(/\{([^|}]+)\|([^}]+)\}/g,(_,a,b)=>huecos.push({ok:a, ops:shuffle([a,b]), r:null})); return {s, huecos}; })
+}; }
+function vistaDesarrollo(sid){
+  if(!desEj) nuevoDes();
+  const cols=['Infinitive','Past simple','Past participle','Spanish'];
+  app.innerHTML = cabSeccion(sid,'Desarrollo')+`<span class="eyebrow">Inglés · Desarrollo</span><h1 style="margin-top:6px">Desarrollo</h1>
+  <p class="muted" style="margin:8px 0 18px;max-width:70ch">Tres ejercicios como los del examen. Corrige cada uno con su botón. Con «Ejercicios nuevos» cambian los verbos y las oraciones.</p>
+  <div class="actions"><button class="btn" id="desNuevo">Ejercicios nuevos</button></div>
+  <section class="exam-sec"><header><h2>Ejercicio 1 · Irregular verbs</h2><span class="mono">10 verbos</span><p>Completa las casillas vacías: infinitivo, pasado simple, participio y significado en español.</p></header>
+    <div class="tbl"><table class="des-verbos"><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${desEj.verbos.map((x,r)=>`<tr>${[0,1,2,3].map(c=>c===x.dada?`<td><b>${c===3?esc(x.v[3][0]):esc(x.v[c])}</b></td>`:`<td><input data-r="${r}" data-c="${c}" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="${cols[c]} del verbo ${r+1}"><span class="des-sol"></span></td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="corrV">Corregir</button><span class="mono muted" id="resV"></span></div></section>
+  <section class="exam-sec"><header><h2>Ejercicio 2 · Present perfect</h2><span class="mono">5 oraciones</span><p>Ordena las palabras para formar la oración. Toca las palabras en orden; toca una palabra de tu oración para quitarla.</p></header>
+    <div class="stack" id="frases"></div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="corrF">Corregir</button><span class="mono muted" id="resF"></span></div></section>
+  <section class="exam-sec"><header><h2>Ejercicio 3 · Past simple or past continuous?</h2><span class="mono">8 oraciones</span><p>Rodea (toca) la opción correcta en cada oración.</p></header>
+    <div class="stack" id="pasado"></div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="corrP">Corregir</button><span class="mono muted" id="resP"></span></div></section>${pie()}`;
+  $('#desNuevo').onclick=()=>{ nuevoDes(); vistaDesarrollo(sid); };
+  // Ejercicio 1
+  const okV=(x,c,val)=>{ const v=normTxt(val); if(!v) return false; if(c===3){ const partes=v.split(/[\/,;]| o /).map(s=>s.trim().replace(/^(to )/,'')).filter(Boolean); return partes.length>0 && partes.every(p=>x.v[3].some(m=>normTxt(m)===p || normTxt(m)===p.replace(/se$/,''))); }
+    const sol=normTxt(x.v[c]).split(' / '); const partes=v.split(/[\/,]| or /).map(s=>s.trim()).filter(Boolean); return partes.length>0 && partes.every(p=>sol.includes(p.replace(/^to /,''))); };
+  $('#corrV').onclick=()=>{ let ok=0, tot=0; app.querySelectorAll('.des-verbos input').forEach(inp=>{ const x=desEj.verbos[+inp.dataset.r], c=+inp.dataset.c; tot++; const bien=okV(x,c,inp.value); if(bien) ok++;
+      inp.classList.toggle('ok',bien); inp.classList.toggle('bad',!bien); inp.nextElementSibling.textContent = bien? '' : (c===3? x.v[3].slice(0,2).join(' / ') : x.v[c]); });
+    $('#resV').textContent=`${ok} de ${tot} casillas bien`; };
+  // Ejercicio 2
+  const pintarF=()=>{ $('#frases').innerHTML=desEj.frases.map((x,k)=>`<div class="ex des-frase" data-k="${k}"><span class="eyebrow">Oración ${k+1}</span>
+      <div class="des-linea">${x.sel.length? x.sel.map(i=>`<button class="ficha on" data-i="${i}">${esc(x.fichas.find(f=>f.i===i).w)}</button>`).join(''):'<span class="muted">Toca las palabras de abajo…</span>'}<span class="des-punto">${x.f[1]}</span></div>
+      <div class="des-fichas">${x.fichas.map(f=>`<button class="ficha" data-i="${f.i}" ${x.sel.includes(f.i)?'disabled':''}>${esc(f.w)}</button>`).join('')}</div><div class="des-out"></div></div>`).join('');
+    app.querySelectorAll('.des-frase').forEach(box=>{ const x=desEj.frases[+box.dataset.k];
+      box.querySelectorAll('.des-fichas .ficha').forEach(b=>b.onclick=()=>{ x.sel.push(+b.dataset.i); pintarF(); });
+      box.querySelectorAll('.des-linea .ficha').forEach(b=>b.onclick=()=>{ x.sel=x.sel.filter(i=>i!==+b.dataset.i); pintarF(); }); }); };
+  pintarF();
+  $('#corrF').onclick=()=>{ let ok=0; app.querySelectorAll('.des-frase').forEach(box=>{ const x=desEj.frases[+box.dataset.k];
+      const mia=normTxt(x.sel.map(i=>x.fichas.find(f=>f.i===i).w).join(' ')); const buenas=[x.f[0],...(x.f[2]||[])].map(normTxt); const bien=buenas.includes(mia); if(bien) ok++;
+      box.querySelector('.des-out').innerHTML=`<div class="res ${bien?'ok':'bad'}">${bien?'Correcto':(x.sel.length<x.fichas.length?'Incompleta. ':'No es correcta. ')+'Solución: <b>'+esc(x.f[0])+x.f[1]+'</b>'}</div>`; });
+    $('#resF').textContent=`${ok} de ${desEj.frases.length} bien`; };
+  // Ejercicio 3
+  const pintarP=(corregir)=>{ $('#pasado').innerHTML=desEj.pasado.map((x,k)=>{ let h=0;
+      const html=esc(x.s).replace(/\{([^|}]+)\|([^}]+)\}/g,()=>{ const g=x.huecos[h], gi=h++; return `<span class="des-hueco">( ${g.ops.map(o=>{ let cls=g.r===o?'on':''; if(corregir){ if(o===g.ok) cls+=' ok'; else if(g.r===o) cls+=' bad'; } return `<button class="ficha ${cls}" data-g="${gi}" data-o="${esc(o)}">${esc(o)}</button>`; }).join(' / ')} )</span>`; });
+      return `<div class="ex des-pas" data-k="${k}"><span class="eyebrow">Oración ${k+1}</span><div class="des-oracion">${html}</div></div>`; }).join('');
+    app.querySelectorAll('.des-pas').forEach(box=>{ const x=desEj.pasado[+box.dataset.k]; box.querySelectorAll('.ficha').forEach(b=>b.onclick=()=>{ x.huecos[+b.dataset.g].r=b.dataset.o.replace(/&#39;/g,"'"); pintarP(false); }); }); };
+  pintarP(false);
+  $('#corrP').onclick=()=>{ pintarP(true); const hs=desEj.pasado.flatMap(x=>x.huecos); const ok=hs.filter(g=>g.r===g.ok).length; $('#resP').textContent=`${ok} de ${hs.length} huecos bien`; };
+}
+(function(){ const st=document.createElement('style'); st.textContent=`
+.gl-busca{width:100%;max-width:420px;padding:10px 14px;border:1.5px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink);font:inherit;margin:0 0 18px}
+.des-verbos input{width:100%;min-width:72px;font-family:var(--f-mono);font-size:.95rem;padding:7px 9px;border:1.5px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--ink)}
+.des-verbos input.ok{border-color:var(--ok);background:var(--ok-bg)} .des-verbos input.bad{border-color:var(--bad);background:var(--bad-bg)}
+.des-sol{display:block;font-size:.82rem;color:var(--ok);font-weight:700;margin-top:3px}
+.ficha{display:inline-block;border:1.5px solid var(--line);background:var(--surface-2);color:var(--ink);border-radius:999px;padding:6px 12px;margin:3px 2px;font:inherit;font-size:.95rem}
+.ficha:hover{border-color:var(--acc)} .ficha.on{border-color:var(--acc);background:var(--acc-soft)} .ficha[disabled]{opacity:.3}
+.ficha.ok{border-color:var(--ok);background:var(--ok-bg)} .ficha.bad{border-color:var(--bad);background:var(--bad-bg);text-decoration:line-through}
+.des-linea{min-height:48px;padding:8px;border:1.5px dashed var(--line);border-radius:10px;display:flex;flex-wrap:wrap;align-items:center}
+.des-punto{font-weight:700;margin-left:4px} .des-oracion{font-size:1.02rem;line-height:2.4}
+`; document.head.appendChild(st); })();
 ESTUDIO.extra("sistemas", {
  1:{cortas:[
   {p:"¿Qué es el sistema comercial? Explica sus agentes y sus tres flujos.", r:"Es el conjunto de elementos, relaciones y flujos que permiten que los productos lleguen <b>de quienes los producen a quienes los consumen</b>. Agentes: empresa o fabricante, intermediarios (mayoristas y minoristas), consumidor final e instituciones. Flujos: <b>físico</b> (traslado del producto), <b>de información</b> (demanda, precios, existencias, preferencias) y <b>financiero</b> (pagos, cobros y condiciones).", k:["del productor al consumidor","agentes: empresa, intermediarios, consumidor, instituciones","flujo físico","flujo de información","flujo financiero"]},
@@ -6014,6 +6345,9 @@ ESTUDIO.extra("comercio", {
 });
 /* Logística: el examen no tiene preguntas cortas, así que se quitan de todos los temas */
 (DATA.logistica?.temas||[]).forEach(t=>{ delete t.cortas; });
+/* Inglés: las preguntas cortas se sustituyen por el apartado «Desarrollo»; el simulacro queda en test + ejercicios (+ writing) */
+(DATA.ingles?.temas||[]).forEach(t=>{ delete t.cortas; });
+if(DATA.ingles) DATA.ingles.simulacro={...(DATA.ingles.simulacro||{}), formato:{nt:20, nc:0, ne:2, pt:6, pe:4, mix:true}};
 /* ---------- Fin práctica extra ---------- */
 function arrancar(){ estado=leerHash(); render(); }
 ASIGNATURAS.forEach(a=>{ if(!DATA[a.id]) a.listo=false; });
