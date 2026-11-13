@@ -6034,7 +6034,16 @@ const VERBOS_IRR = [
  ["sit","sat","sat",["sentarse","estar sentado"]],["sleep","slept","slept",["dormir"]],["speak","spoke","spoken",["hablar"]],["spend","spent","spent",["gastar","pasar"]],
  ["swim","swam","swum",["nadar"]],["take","took","taken",["coger","tomar","llevar"]],["teach","taught","taught",["enseñar"]],["tell","told","told",["decir","contar"]],
  ["think","thought","thought",["pensar","creer"]],["understand","understood","understood",["entender","comprender"]],["wake","woke","woken",["despertar","despertarse"]],
- ["wear","wore","worn",["llevar puesto","vestir","llevar"]],["win","won","won",["ganar"]],["write","wrote","written",["escribir"]]
+ ["wear","wore","worn",["llevar puesto","vestir","llevar"]],["win","won","won",["ganar"]],["write","wrote","written",["escribir"]],
+ ["bite","bit","bitten",["morder"]],["blow","blew","blown",["soplar"]],["cut","cut","cut",["cortar"]],["deal","dealt","dealt",["tratar","negociar","repartir"]],["draw","drew","drawn",["dibujar"]],
+ ["dream","dreamt / dreamed","dreamt / dreamed",["soñar"]],["feed","fed","fed",["alimentar","dar de comer"]],["fight","fought","fought",["pelear","luchar"]],["forgive","forgave","forgiven",["perdonar"]],
+ ["freeze","froze","frozen",["congelar","congelarse"]],["grow","grew","grown",["crecer","cultivar"]],["hang","hung","hung",["colgar"]],["hide","hid","hidden",["esconder","esconderse","ocultar"]],
+ ["hit","hit","hit",["golpear","pegar"]],["hold","held","held",["sostener","sujetar","celebrar"]],["hurt","hurt","hurt",["herir","hacer daño","doler"]],["lead","led","led",["dirigir","liderar","guiar"]],
+ ["learn","learnt / learned","learnt / learned",["aprender"]],["let","let","let",["dejar","permitir"]],["mean","meant","meant",["significar","querer decir"]],["ride","rode","ridden",["montar","ir en"]],
+ ["rise","rose","risen",["subir","elevarse","levantarse"]],["set","set","set",["poner","fijar","establecer"]],["shake","shook","shaken",["agitar","sacudir","temblar"]],["shine","shone","shone",["brillar"]],
+ ["show","showed","shown",["mostrar","enseñar"]],["shut","shut","shut",["cerrar"]],["spell","spelt / spelled","spelt / spelled",["deletrear"]],["stand","stood","stood",["estar de pie","aguantar"]],
+ ["steal","stole","stolen",["robar"]],["throw","threw","thrown",["lanzar","tirar"]],["burn","burnt / burned","burnt / burned",["quemar"]],["light","lit","lit",["encender","iluminar"]],
+ ["lie","lay","lain",["tumbarse","acostarse","yacer"]],["sink","sank","sunk",["hundir","hundirse"]],["stick","stuck","stuck",["pegar","clavar"]],["sweep","swept","swept",["barrer"]],["upset","upset","upset",["disgustar","molestar"]]
 ];
 const PRES_PERF = [
  ["I have never been to London","."],["She has already sent the invoice",".",["She has sent the invoice already"]],["Have you ever worked in a warehouse","?"],
@@ -6044,7 +6053,57 @@ const PRES_PERF = [
  ["They have never travelled by plane","."],["Has he paid the invoice","?"],["I have just had breakfast","."],["The price of raw materials has gone up","."],
  ["Have you ever eaten sushi","?"],["We have already loaded the truck",".",["We have loaded the truck already"]],["My boss hasn't answered my email yet","."]
 ];
+// Generador de oraciones en present perfect con el vocabulario de las units 1-7
+const PP_SUJ = [["I","have"],["You","have"],["We","have"],["They","have"],["She","has"],["He","has"],["My boss","has"],["The supplier","has"],["Our company","has"],["The logistician","has"],["My flatmate","has"],["The client","has"],["The courier","has"],["My friends","have"],["The shipper","has"],["Our team","has"]];
+// [participio + complemento] sin personas como complemento, para que el orden sea único
+const PP_ACC = [
+ "sent the invoice","received the delivery","paid the invoice","signed the contract","booked a flight to London","read the hotel reviews","written a review",
+ "finished the report","checked the packing list","loaded the truck","ordered the raw materials","answered the email","visited the warehouse","opened a savings account",
+ "transferred the money","done the housework","had breakfast","bought a new laptop","made a mistake","found a new job","lost the delivery note","seen the new office",
+ "taken a nap","prepared the shipment","updated the stock","printed the commercial documents","changed the terms of sale","sent a message on WhatsApp",
+ "walked the dog","done the homework","manufactured the new product","tracked the shipment","rented a reefer trailer","closed the checking account",
+ "posted a photo on Instagram","read the netiquette rules","got dressed","cleaned the warehouse","checked the cash balance","purchased raw materials"
+].map(s=>{ const i=s.indexOf(' '); return [s.slice(0,i), s.slice(i+1)]; });
+const PP_EXP = ["been to London","eaten sushi","worked in a warehouse","travelled by plane","written a review","used a reefer trailer","sent a CMR","been to a trade fair","worked with a courier","had an overdraft","lived abroad","worked part-time"];
+const PP_DUR = [["lived","in Madrid"],["worked","for this company"],["known","the new supplier"],["studied","English"],["had","this car"],["worked","in logistics"],["been","a freelance worker"],["used","this savings account"]];
+const PP_FOR = ["for two years","for five years","for a long time","for six months","for three weeks"];
+const PP_SINCE = ["since 2020","since January","since last summer","since Monday"];
+const pick = l => l[Math.floor(Math.random()*l.length)];
+const PP_PERS = ["I","You","We","They","She","He","My boss","My flatmate","My friends","The logistician"];
+function genPP(){
+  const tipo = pick(['just','already','never','neg','ever','yet','dur','dur']);
+  const [s,aux]=pick(['never','ever','dur'].includes(tipo)? PP_SUJ.filter(x=>PP_PERS.includes(x[0])) : PP_SUJ), neg = aux==='has'? "hasn't" : "haven't", Aux = aux==='has'? 'Has':'Have', sq = s==='I'? 'I' : s.replace(/^(My|Our|The|You|We|They|She|He)\b/, m=>m==='I'?m:m.toLowerCase());
+  if(tipo==='just'){ const [v,c]=pick(PP_ACC); return [`${s} ${aux} just ${v} ${c}`,'.']; }
+  if(tipo==='already'){ const [v,c]=pick(PP_ACC); return [`${s} ${aux} already ${v} ${c}`,'.',[`${s} ${aux} ${v} ${c} already`]]; }
+  if(tipo==='never'){ const e=pick(PP_EXP); return [`${s} ${aux} never ${e}`,'.']; }
+  if(tipo==='neg'){ const [v,c]=pick(PP_ACC); return [`${s} ${neg} ${v} ${c} yet`,'.']; }
+  if(tipo==='ever'){ const e=pick(PP_EXP); return [`${Aux} ${sq} ever ${e}`,'?']; }
+  if(tipo==='yet'){ const [v,c]=pick(PP_ACC); return [`${Aux} ${sq} ${v} ${c} yet`,'?']; }
+  const [v,c]=pick(PP_DUR), t=Math.random()<.5? pick(PP_FOR) : pick(PP_SINCE);
+  return [`${s} ${aux} ${v} ${c} ${t}`,'.'];
+}
+function genPPs(n){ const out=[], vistos=new Set(); let g=0; while(out.length<n && g++<200){ const f=genPP(); const k=f[0].split(' ').slice(-2).join(' '); if(vistos.has(f[0])||vistos.has(k)) continue; vistos.add(f[0]); vistos.add(k); out.push(f); } return out; }
+
 // {correcta|incorrecta}
+// Generador de past simple / past continuous con vocabulario de las units
+const PS_SUJ=[["I","was"],["You","were"],["We","were"],["They","were"],["She","was"],["He","was"],["My flatmate","was"],["The logistician","was"],["My friends","were"],["My boss","was"]];
+const PS_ACT=[["had","having","a shower"],["drove","driving","to work"],["cooked","cooking","dinner"],["studied","studying","English"],["loaded","loading","the truck"],["talked","talking","to a client"],
+ ["wrote","writing","an email"],["watched","watching","a film"],["walked","walking","the dog"],["prepared","preparing","the shipment"],["checked","checking","the invoices"],["did","doing","the housework"],
+ ["read","reading","the hotel reviews"],["cleaned","cleaning","the warehouse"],["played","playing","video games"],["updated","updating","the stock"],["waited","waiting","for the courier"],["had","having","lunch"]];
+const PS_EVT=[["the phone","rang","was ringing"],["the courier","arrived","was arriving"],["my boss","called","was calling"],["the delivery","arrived","was arriving"],["it","started to rain","was starting to rain"],
+ ["the lights","went out","were going out"],["the truck","broke down","was breaking down"],["the client","phoned","was phoning"],["the email","arrived","was arriving"],["the fire alarm","went off","was going off"],["a customer","came in","was coming in"]];
+const PS_VECES=["twice last week","three times last month","twice yesterday","four times last year","three times last weekend"];
+const PS_HORA=["At 8 o'clock last night","At this time yesterday","At 10 am yesterday","At midnight last Saturday"];
+const cap=s=>s[0].toUpperCase()+s.slice(1);
+function genPS(){
+  const [s,w]=pick(PS_SUJ), [past,ing,o]=pick(PS_ACT), tipo=pick(['when','when','while','veces','hora']);
+  if(tipo==='when'){ const [es,ep,ec]=pick(PS_EVT); return `${s} {${w} ${ing}|${past}} ${o} when ${es} {${ep}|${ec}}.`; }
+  if(tipo==='while'){ let [s2,w2]=pick(PS_SUJ), [p2,i2,o2]=pick(PS_ACT); let g=0; while((s2===s||o2===o)&&g++<20){ [s2,w2]=pick(PS_SUJ); [p2,i2,o2]=pick(PS_ACT); }
+    return `While ${s==='I'?'I':s.replace(/^(You|We|They|She|He|My|The)\b/,m=>m.toLowerCase())} {${w} ${ing}|${past}} ${o}, ${s2==='I'?'I':s2.replace(/^(You|We|They|She|He|My|The)\b/,m=>m.toLowerCase())} {${w2} ${i2}|${p2}} ${o2}.`; }
+  if(tipo==='veces') return `${s} {${past}|${w} ${ing}} ${o} ${pick(PS_VECES)}.`;
+  return `${pick(PS_HORA)}, ${s==='I'?'I':s.replace(/^(You|We|They|She|He|My|The)\b/,m=>m.toLowerCase())} {${w} ${ing}|${past}} ${o}.`;
+}
+function genPSs(n){ const out=[], vistos=new Set(); let g=0; while(out.length<n && g++<200){ const f=genPS(); const k=f.replace(/\{[^}]*\}/g,''); if(vistos.has(k)) continue; vistos.add(k); out.push(f); } return out; }
 const PAST_SC = [
  "I {was having|had} a shower when the phone {rang|was ringing}.","While we {were driving|drove} to work, it {started|was starting} to rain.",
  "She {was cooking|cooked} dinner when I {arrived|was arriving}.","Yesterday I {went|was going} to the gym after work.",
@@ -6060,16 +6119,16 @@ const PAST_SC = [
 ];
 const normTxt = s=>String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[’]/g,"'").replace(/\s+/g,' ').trim();
 let desEj=null;
-function nuevoDes(){ desEj={
+function nuevoDes(){ desEj={ hecho:{},
   verbos: shuffle(VERBOS_IRR).slice(0,10).map(v=>({v, dada:Math.floor(Math.random()*4)})),
-  frases: shuffle(PRES_PERF).slice(0,5).map(f=>({f, fichas:shuffle(f[0].split(' ').map((w,i)=>({w,i}))), sel:[]})),
-  pasado: shuffle(PAST_SC).slice(0,8).map(s=>{ const huecos=[]; s.replace(/\{([^|}]+)\|([^}]+)\}/g,(_,a,b)=>huecos.push({ok:a, ops:shuffle([a,b]), r:null})); return {s, huecos}; })
+  frases: genPPs(5).map(f=>({f, fichas:shuffle(f[0].split(' ').map((w,i)=>({w,i}))), sel:[]})),
+  pasado: genPSs(8).map(s=>{ const huecos=[]; s.replace(/\{([^|}]+)\|([^}]+)\}/g,(_,a,b)=>huecos.push({ok:a, ops:shuffle([a,b]), r:null})); return {s, huecos}; })
 }; }
 function vistaDesarrollo(sid){
   if(!desEj) nuevoDes();
   const cols=['Infinitive','Past simple','Past participle','Spanish'];
   app.innerHTML = cabSeccion(sid,'Desarrollo')+`<span class="eyebrow">Inglés · Desarrollo</span><h1 style="margin-top:6px">Desarrollo</h1>
-  <p class="muted" style="margin:8px 0 18px;max-width:70ch">Tres ejercicios como los del examen. Corrige cada uno con su botón. Con «Ejercicios nuevos» cambian los verbos y las oraciones.</p>
+  <p class="muted" style="margin:8px 0 18px;max-width:70ch">Tres ejercicios como los del examen. Cada vez salen verbos y oraciones nuevos. Corrige cada uno con su botón y, al terminar, pulsa «Reiniciar».</p>
   <div class="actions"><button class="btn" id="desNuevo">Ejercicios nuevos</button></div>
   <section class="exam-sec"><header><h2>Ejercicio 1 · Irregular verbs</h2><span class="mono">10 verbos</span><p>Completa las casillas vacías: infinitivo, pasado simple, participio y significado en español.</p></header>
     <div class="tbl"><table class="des-verbos"><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${desEj.verbos.map((x,r)=>`<tr>${[0,1,2,3].map(c=>c===x.dada?`<td><b>${c===3?esc(x.v[3][0]):esc(x.v[c])}</b></td>`:`<td><input data-r="${r}" data-c="${c}" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="${cols[c]} del verbo ${r+1}"><span class="des-sol"></span></td>`).join('')}</tr>`).join('')}</tbody></table></div>
@@ -6079,14 +6138,19 @@ function vistaDesarrollo(sid){
     <div class="row" style="margin-top:12px"><button class="btn primary" id="corrF">Corregir</button><span class="mono muted" id="resF"></span></div></section>
   <section class="exam-sec"><header><h2>Ejercicio 3 · Past simple or past continuous?</h2><span class="mono">8 oraciones</span><p>Rodea (toca) la opción correcta en cada oración.</p></header>
     <div class="stack" id="pasado"></div>
-    <div class="row" style="margin-top:12px"><button class="btn primary" id="corrP">Corregir</button><span class="mono muted" id="resP"></span></div></section>${pie()}`;
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="corrP">Corregir</button><span class="mono muted" id="resP"></span></div></section>
+  <section class="exam-sec des-fin" id="desFin"><header><h2>¿Terminaste?</h2><span class="mono" id="finTxt"></span><p id="finP">Corrige los tres ejercicios y pulsa «Reiniciar» para hacer otros nuevos: verbos, oraciones y opciones distintas.</p></header>
+    <div class="row"><button class="btn primary" id="desReset">Reiniciar</button></div></section>${pie()}`;
+  const finCheck=()=>{ const h=desEj.hecho, n=Object.keys(h).length; $('#finTxt').textContent=`${n} de 3 corregidos`;
+    if(n===3){ $('#desFin').classList.add('on'); $('#finP').textContent=`Resultado: ${h.v} · ${h.f} · ${h.p}. Pulsa «Reiniciar» para practicar con ejercicios nuevos.`; } };
+  $('#desReset').onclick=()=>{ nuevoDes(); vistaDesarrollo(sid); };
   $('#desNuevo').onclick=()=>{ nuevoDes(); vistaDesarrollo(sid); };
   // Ejercicio 1
   const okV=(x,c,val)=>{ const v=normTxt(val); if(!v) return false; if(c===3){ const partes=v.split(/[\/,;]| o /).map(s=>s.trim().replace(/^(to )/,'')).filter(Boolean); return partes.length>0 && partes.every(p=>x.v[3].some(m=>normTxt(m)===p || normTxt(m)===p.replace(/se$/,''))); }
     const sol=normTxt(x.v[c]).split(' / '); const partes=v.split(/[\/,]| or /).map(s=>s.trim()).filter(Boolean); return partes.length>0 && partes.every(p=>sol.includes(p.replace(/^to /,''))); };
   $('#corrV').onclick=()=>{ let ok=0, tot=0; app.querySelectorAll('.des-verbos input').forEach(inp=>{ const x=desEj.verbos[+inp.dataset.r], c=+inp.dataset.c; tot++; const bien=okV(x,c,inp.value); if(bien) ok++;
       inp.classList.toggle('ok',bien); inp.classList.toggle('bad',!bien); inp.nextElementSibling.textContent = bien? '' : (c===3? x.v[3].slice(0,2).join(' / ') : x.v[c]); });
-    $('#resV').textContent=`${ok} de ${tot} casillas bien`; };
+    $('#resV').textContent=`${ok} de ${tot} casillas bien`; desEj.hecho.v=`verbos ${ok}/${tot}`; finCheck(); };
   // Ejercicio 2
   const pintarF=()=>{ $('#frases').innerHTML=desEj.frases.map((x,k)=>`<div class="ex des-frase" data-k="${k}"><span class="eyebrow">Oración ${k+1}</span>
       <div class="des-linea">${x.sel.length? x.sel.map(i=>`<button class="ficha on" data-i="${i}">${esc(x.fichas.find(f=>f.i===i).w)}</button>`).join(''):'<span class="muted">Toca las palabras de abajo…</span>'}<span class="des-punto">${x.f[1]}</span></div>
@@ -6098,14 +6162,15 @@ function vistaDesarrollo(sid){
   $('#corrF').onclick=()=>{ let ok=0; app.querySelectorAll('.des-frase').forEach(box=>{ const x=desEj.frases[+box.dataset.k];
       const mia=normTxt(x.sel.map(i=>x.fichas.find(f=>f.i===i).w).join(' ')); const buenas=[x.f[0],...(x.f[2]||[])].map(normTxt); const bien=buenas.includes(mia); if(bien) ok++;
       box.querySelector('.des-out').innerHTML=`<div class="res ${bien?'ok':'bad'}">${bien?'Correcto':(x.sel.length<x.fichas.length?'Incompleta. ':'No es correcta. ')+'Solución: <b>'+esc(x.f[0])+x.f[1]+'</b>'}</div>`; });
-    $('#resF').textContent=`${ok} de ${desEj.frases.length} bien`; };
+    $('#resF').textContent=`${ok} de ${desEj.frases.length} bien`; desEj.hecho.f=`oraciones ${ok}/${desEj.frases.length}`; finCheck(); };
   // Ejercicio 3
   const pintarP=(corregir)=>{ $('#pasado').innerHTML=desEj.pasado.map((x,k)=>{ let h=0;
       const html=esc(x.s).replace(/\{([^|}]+)\|([^}]+)\}/g,()=>{ const g=x.huecos[h], gi=h++; return `<span class="des-hueco">( ${g.ops.map(o=>{ let cls=g.r===o?'on':''; if(corregir){ if(o===g.ok) cls+=' ok'; else if(g.r===o) cls+=' bad'; } return `<button class="ficha ${cls}" data-g="${gi}" data-o="${esc(o)}">${esc(o)}</button>`; }).join(' / ')} )</span>`; });
       return `<div class="ex des-pas" data-k="${k}"><span class="eyebrow">Oración ${k+1}</span><div class="des-oracion">${html}</div></div>`; }).join('');
     app.querySelectorAll('.des-pas').forEach(box=>{ const x=desEj.pasado[+box.dataset.k]; box.querySelectorAll('.ficha').forEach(b=>b.onclick=()=>{ x.huecos[+b.dataset.g].r=b.dataset.o.replace(/&#39;/g,"'"); pintarP(false); }); }); };
   pintarP(false);
-  $('#corrP').onclick=()=>{ pintarP(true); const hs=desEj.pasado.flatMap(x=>x.huecos); const ok=hs.filter(g=>g.r===g.ok).length; $('#resP').textContent=`${ok} de ${hs.length} huecos bien`; };
+  $('#corrP').onclick=()=>{ pintarP(true); const hs=desEj.pasado.flatMap(x=>x.huecos); const ok=hs.filter(g=>g.r===g.ok).length; $('#resP').textContent=`${ok} de ${hs.length} huecos bien`; desEj.hecho.p=`huecos ${ok}/${hs.length}`; finCheck(); };
+  finCheck();
 }
 (function(){ const st=document.createElement('style'); st.textContent=`
 .gl-busca{width:100%;max-width:420px;padding:10px 14px;border:1.5px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink);font:inherit;margin:0 0 18px}
@@ -6116,6 +6181,7 @@ function vistaDesarrollo(sid){
 .ficha:hover{border-color:var(--acc)} .ficha.on{border-color:var(--acc);background:var(--acc-soft)} .ficha[disabled]{opacity:.3}
 .ficha.ok{border-color:var(--ok);background:var(--ok-bg)} .ficha.bad{border-color:var(--bad);background:var(--bad-bg);text-decoration:line-through}
 .des-linea{min-height:48px;padding:8px;border:1.5px dashed var(--line);border-radius:10px;display:flex;flex-wrap:wrap;align-items:center}
+.des-fin.on{border:2px solid var(--acc);border-radius:var(--r);padding:16px}
 .des-punto{font-weight:700;margin-left:4px} .des-oracion{font-size:1.02rem;line-height:2.4}
 `; document.head.appendChild(st); })();
 ESTUDIO.extra("sistemas", {
