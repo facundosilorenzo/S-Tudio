@@ -1000,16 +1000,16 @@ Responde en español, tuteando al alumno, SOLO con un objeto JSON con esta forma
   return items.map((it,i)=>{ const x=arr[i]||{}; let s=Number(x.puntuacion); if(!isFinite(s)) s=0; const blanco=!String(it.a||'').trim(); if(blanco) s=0; s=Math.max(0,Math.min(1,Math.round(s*4)/4)); return blanco? {s:0, bien:'', falta:'No has contestado.'} : {s, bien:String(x.bien||''), falta:String(x.falta||'')}; });
 }
 
-function cortasUI(el, sid, n, lista){
+function cortasUI(el, sid, n, lista, pref='c'){
   el.innerHTML = `<p class="muted" style="margin-bottom:14px">Escribe la respuesta como en el examen. <span data-a="ia" ${SAMPLE?'':'hidden'}>Claude la corrige comparándola con los apuntes, o mira</span><span class="sin-ia" ${SAMPLE?'hidden':''}>Después mira</span> la respuesta modelo y ponte nota.</p>
-  <div class="stack">${lista.map((c,k)=>{ const id=`${sid}-t${n}-c${k}`; const v=P.ct[id]; return `<div class="ex" data-k="${k}">
-    <span class="eyebrow">Pregunta corta ${k+1}${v!=null?` · última nota ${fmtN(v*10,1)}/10`:''}</span><div class="enun"><b>${c.p}</b></div>
+  <div class="stack">${lista.map((c,k)=>{ const id=`${sid}-t${n}-${pref}${k}`; const v=P.ct[id]; return `<div class="ex" data-k="${k}">
+    <span class="eyebrow">${pref==='d'?`${c.ap?`Apartado ${c.ap} · `:''}Pregunta de desarrollo`:'Pregunta corta'} ${k+1}${v!=null?` · última nota ${fmtN(v*10,1)}/10`:''}</span><div class="enun"><b>${c.p}</b></div>
     <textarea class="resp" placeholder="Tu respuesta…" aria-label="Tu respuesta a la pregunta corta ${k+1}"></textarea>
     <div class="row"><button class="btn primary" data-a="ia" ${SAMPLE?'':'hidden'}>Corregir con Claude</button><button class="btn ghost" data-a="ver">Ver respuesta modelo</button></div>
     <div class="out" aria-live="polite"></div>
     <div class="model" hidden>${modeloHTML(c)}${selfMarkHTML(v)}</div></div>`; }).join('')}</div>`;
   el.querySelectorAll('.ex').forEach(box=>{
-    const k=Number(box.dataset.k), c=lista[k], id=`${sid}-t${n}-c${k}`; const ta=box.querySelector('textarea'), out=box.querySelector('.out'), mod=box.querySelector('.model');
+    const k=Number(box.dataset.k), c=lista[k], id=`${sid}-t${n}-${pref}${k}`; const ta=box.querySelector('textarea'), out=box.querySelector('.out'), mod=box.querySelector('.model');
     box.querySelector('[data-a=ver]').onclick=()=>{ mod.hidden=!mod.hidden; };
     wireSelfMark(mod, v=>{ P.ct[id]=v; save(); });
     const bIA=box.querySelector('button[data-a=ia]');
@@ -5975,6 +5975,7 @@ function cabSeccion(sid, titulo){
   return topbar(`<button onclick="ir('')">Inicio</button><span>/</span><button onclick="ir('${sid}')">${esc(a.nombre)}</button><span>/</span><span>${titulo}</span>`);
 }
 function seccionesHTML(sid){
+  if(sid==='sistemas') return simSeccionesHTML(sid);
   return `<div class="grid" style="margin-bottom:26px">
     <button class="tcard" onclick="ir('${sid}-glossary')"><span class="num">APARTADO</span><h3>Glossary</h3><p>Los ${GLOSARIO_INGLES.length} términos del glosario de las units 1-7, con definición y traducción. También en tarjetas.</p></button>
     <button class="tcard" onclick="ir('${sid}-tipotest')"><span class="num">APARTADO</span><h3>Tipo test</h3><p>Preguntas del glosario y preguntas generales de los 7 temas, con corrección al momento.</p></button>
@@ -6006,6 +6007,7 @@ function vistaGlossary(sid){
 /* --- Tipo test --- */
 let ttModo='mezcla';
 function vistaTipoTest(sid){
+  if(sid==='sistemas') return simTipoTest(sid);
   const d=DATA[sid];
   const gen=todasPreguntas(sid), glo=preguntasGlosario();
   const modos={mezcla:['Mezcla',`20 del glossary + 20 de los temas`], glossary:['Glossary',`30 preguntas del glosario (${glo.length} posibles)`], temas:['Temas 1-7',`30 preguntas generales de los 7 temas (${gen.length} posibles)`]};
@@ -6125,6 +6127,7 @@ function nuevoDes(){ desEj={ hecho:{},
   pasado: genPSs(8).map(s=>{ const huecos=[]; s.replace(/\{([^|}]+)\|([^}]+)\}/g,(_,a,b)=>huecos.push({ok:a, ops:shuffle([a,b]), r:null})); return {s, huecos}; })
 }; }
 function vistaDesarrollo(sid){
+  if(sid==='sistemas') return simDesarrollo(sid);
   if(!desEj) nuevoDes();
   const cols=['Infinitive','Past simple','Past participle','Spanish'];
   app.innerHTML = cabSeccion(sid,'Desarrollo')+`<span class="eyebrow">Inglés · Desarrollo</span><h1 style="margin-top:6px">Desarrollo</h1>
@@ -6238,6 +6241,122 @@ ESTUDIO.extra("sistemas", {
   {p:"<b>Caso práctico.</b> Una academia de idiomas ve que se matriculan menos alumnos de verano. Redacta el problema bien definido, el objetivo general, dos objetivos específicos y una pareja H0/H1.", pasos:["Problema: «las matrículas de los cursos de verano han bajado un X % respecto al verano anterior en la sede de…» (concreto, verificable y delimitado).","Objetivo general: determinar por qué han bajado las matrículas de verano.","Específicos: conocer el precio que consideran adecuado; saber qué horarios prefieren.","H0: el precio no influye en la decisión de matricularse. H1: el precio sí influye."]}
  ]}
 });
+/* ---------- Sistemas: apartados Tipo test y Desarrollo según lo que entra en el examen ---------- */
+// Qué entra de cada tema (indicado por el alumno): apartados tipo test y apartados de desarrollo
+const SIM_PLAN = {
+  3:{test:"Apartados 2, 6, 8 y 10", des:"Apartados 3, 4 y 7"},
+  4:{test:"Apartados 2, 4, 6, 8 y 10", des:"Apartados 3 y 7"},
+  5:{test:"Tema entero"},
+  6:{test:"Tema entero"},
+  7:{test:"Todos los apartados salvo el 2, el 7 y el 8", des:"Apartados 2, 7 y 8"}
+};
+// Preguntas tipo test nuevas por tema (se suman a las del propio tema cuando entra entero)
+const SIM_TT = {
+5:[
+ {p:"Los cuatro requisitos de idoneidad de un SIM son…", o:["Relevancia, exactitud, actualidad y coste-beneficio","Fiabilidad, coste, validez y utilidad","Producto, precio, distribución y comunicación","Rapidez, volumen, precio y diseño"], c:0, e:"Fiabilidad, coste, validez y utilidad son los criterios para <b>valorar los datos</b>, no los requisitos del sistema."},
+ {p:"¿Qué pregunta hay que hacerse ante cada fuente para comprobar su <b>relevancia</b>?", o:["¿Esta información me ayuda a decidir algo concreto?","¿Puedo confiar en que estos datos son correctos?","¿Cuánto cuesta esta información?","¿Quién más tiene estos datos?"], c:0, e:"La segunda pregunta («¿puedo confiar…?») corresponde a la exactitud."},
+ {p:"¿Qué pregunta corresponde al requisito de <b>exactitud</b>?", o:["¿Puedo confiar en que estos datos son correctos?","¿Me ayuda a decidir algo concreto?","¿Está actualizada esta información?","¿Compensa lo que cuesta?"], c:0, e:"Exactitud: que los datos reflejen la realidad con precisión."},
+ {p:"Una forma de asegurar la <b>exactitud</b> de los datos de ventas es…", o:["Hacer comprobaciones cruzadas con la contabilidad","Guardar todos los datos posibles","Comprar un ERP caro","Revisarlos una vez cada cinco años"], c:0, e:"Cruzar los datos con la contabilidad permite detectar errores de tecleo o duplicados."},
+ {p:"Para cumplir el requisito de <b>actualidad</b>, la empresa debe…", o:["Fijar la frecuencia con que revisa cada tipo de información","Borrar todos los datos antiguos","Recoger datos solo una vez","Acumular más datos que la competencia"], c:0, e:"La información pierde valor con el tiempo; cada dato necesita su ritmo de revisión."},
+ {p:"Una pyme monta un sistema de información enorme que no puede mantener ni usar. ¿Qué requisito incumple?", o:["Coste-beneficio","Exactitud","Actualidad","Validez"], c:0, e:"Sobredimensionar el SIM también es mala planificación: hay que sacar el máximo valor con los recursos disponibles."},
+ {p:"Acumular datos sin uso…", o:["Satura el sistema y dificulta encontrar lo importante","Mejora siempre las decisiones","Es obligatorio por el RGPD","No tiene ningún coste"], c:0, e:"Incumple la relevancia y también eleva el coste."},
+ {p:"Los cuatro criterios para <b>valorar los datos</b> son…", o:["Fiabilidad, coste, validez y utilidad","Relevancia, exactitud, actualidad y coste-beneficio","Sistemática, objetiva, específica y aplicada","Cuantitativa, cualitativa, primaria y secundaria"], c:0, e:"Relevancia, exactitud, actualidad y coste-beneficio son los requisitos del SIM."},
+ {p:"«¿Quién generó el dato, con qué método y con qué frecuencia se actualiza?» son preguntas para valorar la…", o:["Fiabilidad","Utilidad","Validez","Relevancia"], c:0, e:"La fiabilidad depende del origen, el método y la actualización del dato."},
+ {p:"¿Qué dos criterios sirven sobre todo para <b>elegir entre fuentes</b>?", o:["Fiabilidad y coste","Validez y utilidad","Exactitud y actualidad","Relevancia y seguridad"], c:0, e:"Fiabilidad y coste ayudan a elegir la fuente; validez y utilidad, a ver si el dato sirve para la decisión."},
+ {p:"¿Qué dos criterios sirven para comprobar si un dato <b>sirve para la decisión</b>?", o:["Validez y utilidad","Fiabilidad y coste","Exactitud y relevancia","Coste y actualidad"], c:0, e:"Validez: ajuste a la pregunta. Utilidad: que aporte algo a la decisión."},
+ {p:"Los tres aspectos de la <b>validez</b> de un dato son…", o:["Ajuste al problema, actualidad y nivel de detalle","Precio, tiempo y esfuerzo","Origen, método y frecuencia","Anonimato, confidencialidad y consentimiento"], c:0, e:"Origen, método y frecuencia son las preguntas de la fiabilidad."},
+ {p:"La <b>utilidad</b> de la información suele aumentar cuando…", o:["Se combinan varias fuentes","Se usa una sola fuente","Se compra la fuente más cara","Se guarda sin analizar"], c:0, e:"Cruzar fuentes (internas y externas) aporta más a la decisión."},
+ {p:"Gran parte del coste de la información de un SIM está en…", o:["Mantener los datos actualizados y depurados","Imprimir los informes","Comprar ordenadores","Pagar a los clientes"], c:0, e:"El coste no es solo obtener el dato: también mantenerlo correcto en el tiempo."},
+ {p:"Según el tema, un dato…", o:["No es útil por sí solo: necesita tratamiento","Siempre es información","Nunca necesita análisis","Solo vale si es externo"], c:0, e:"Las técnicas estadísticas convierten el dato en información útil."},
+ {p:"Ordenar las ventas en una tabla por zonas o categorías de producto es…", o:["Organizar y resumir","Calcular medidas de síntesis","Detectar tendencias","Hacer un pretest"], c:0, e:"Es la primera técnica: organizar y resumir en tablas o categorías."},
+ {p:"Comparar las ventas de los últimos 3 años para ver si el verano crece cada año es…", o:["Detectar tendencias y relaciones","Organizar y resumir","Calcular una media","Depurar datos"], c:0, e:"Se buscan patrones a lo largo del tiempo o entre variables."},
+ {p:"Una tasa de variación de ventas es un ejemplo de…", o:["Medida de síntesis","Dato cualitativo","Fuente primaria","Herramienta CRM"], c:0, e:"Medias, porcentajes y tasas de variación condensan muchos datos en cifras fáciles de leer."},
+ {p:"Además de técnico, el tratamiento de datos de clientes es una responsabilidad…", o:["Legal y ética","Solo contable","Solo comercial","Opcional"], c:0, e:"Al tratarse de datos personales hay que cumplir el RGPD."},
+ {p:"La herramienta más accesible y barata, pero limitada cuando crece mucho el volumen de datos, es…", o:["La hoja de cálculo","El ERP","El CRM","La base de datos corporativa"], c:0, e:"Sirve para registrar, ordenar y calcular con volumen moderado."},
+ {p:"Que el departamento comercial, el de atención al cliente y el de marketing consulten el mismo historial de cada cliente es posible gracias a un…", o:["CRM","Procesador de textos","Hoja de cálculo aislada","Pretest"], c:0, e:"El CRM centraliza compras, consultas y reclamaciones de cada cliente."},
+ {p:"Una ventaja clave del ERP es que…", o:["Reduce duplicidades al integrar ventas, almacén y contabilidad","Solo gestiona las redes sociales","Sustituye a la investigación comercial","No necesita actualizarse"], c:0, e:"Un único sistema evita registrar lo mismo varias veces."},
+ {p:"Que la herramienta permita filtrar y buscar rápido la información es la condición de…", o:["Agilidad de consulta","Actualización permanente","Seguridad","Exactitud"], c:0, e:"Las tres condiciones: actualización permanente, agilidad de consulta y seguridad con cumplimiento legal."},
+ {p:"Lo ideal es que la actualización de la herramienta informática sea…", o:["Permanente y, si es posible, automática","Anual y manual","Solo cuando hay un problema","Hecha por los clientes"], c:0, e:"La actualización automática reduce el coste de mantener los datos al día."},
+ {p:"Dar a cada persona acceso solo a los datos que necesita según su función responde a…", o:["La seguridad y el control de acceso","La agilidad de consulta","La relevancia","El coste-beneficio"], c:0, e:"Niveles de acceso según la función y cumplimiento del RGPD."},
+ {p:"En el caso Zapatería Martín, ¿qué fuente deja para una segunda fase?", o:["La encuesta a clientas","Las ventas históricas","El informe sectorial","Ninguna"], c:0, e:"Primero sus ventas (fiables y gratuitas), luego el informe sectorial y solo si queda una duda concreta, la encuesta."},
+ {p:"¿Por qué la Zapatería Martín empieza por sus ventas históricas?", o:["Son fiables, gratuitas y de su propio negocio","Son las más caras","Son datos primarios nuevos","Lo exige el RGPD"], c:0, e:"Con poco presupuesto se empieza por lo que ya se tiene."},
+ {p:"En el ejemplo de Rioverde, la tarjeta de fidelización integrada permite…", o:["Actualizar el histórico de cada cliente con cada compra cumpliendo el RGPD","Vender haciéndolo pasar por una encuesta","Eliminar el CRM","Pedir donativos"], c:0, e:"Es un ejemplo de actualización permanente y automática."}
+],
+6:[
+ {p:"La investigación comercial también se llama…", o:["Investigación de mercados","Inteligencia de marketing","Datos internos","Marketing mix"], c:0, e:"Es el subsistema del SIM que obtiene información específica."},
+ {p:"La investigación comercial es…", o:["Uno de los subsistemas del SIM","Un sistema independiente del SIM","Lo mismo que el SIM","Una herramienta informática"], c:0, e:"Forma parte del SIM junto a datos internos, inteligencia de marketing y apoyo a las decisiones."},
+ {p:"La definición de investigación comercial incluye identificar, recopilar, analizar, interpretar y…", o:["Presentar la información para ayudar a decidir","Vender el producto","Fabricar el producto","Eliminar el riesgo"], c:0, e:"Es un proceso sistemático y objetivo que termina presentando la información."},
+ {p:"Se considera precedente de la investigación comercial el trabajo de…", o:["Charles Coolidge Parlin en 1911","Philip Kotler en 1990","Abraham Maslow en 1943","Michael Porter en 1979"], c:0, e:"Parlin está considerado el pionero de la investigación de mercados."},
+ {p:"«Sigue un método ordenado por fases» describe la característica…", o:["Sistemática","Específica","Aplicada","Objetiva"], c:0, e:"Sistemática = método ordenado."},
+ {p:"«Es imparcial en el diseño y en la interpretación» describe la característica…", o:["Objetiva","Sistemática","Específica","Aplicada"], c:0, e:"El investigador no busca confirmar lo que quiere oír."},
+ {p:"«Apoya una decisión real y no genera teoría» describe la característica…", o:["Aplicada","Objetiva","Sistemática","Específica"], c:0, e:"Su fin es práctico: ayudar a decidir."},
+ {p:"El SIM se usa ___ y la investigación comercial ___.", o:["A diario / bajo demanda","Bajo demanda / a diario","Una vez al año / nunca","Solo en crisis / siempre"], c:0, e:"El SIM es permanente; la investigación es un proyecto puntual."},
+ {p:"En cuanto al alcance, la investigación comercial…", o:["Responde a una pregunta concreta","Abarca toda la información de la empresa","Solo usa datos contables","No tiene límites"], c:0, e:"El SIM abarca toda la información; la investigación, una pregunta concreta."},
+ {p:"El SIM se alimenta sobre todo de…", o:["Datos internos e inteligencia de mercado","Solo datos primarios nuevos","Solo encuestas","Solo informes del INE"], c:0, e:"La investigación comercial es la que suele generar datos primarios nuevos."},
+ {p:"En el caso Aromas del Sur, ¿por qué no basta con el SIM?", o:["Porque explica el pasado pero no predice cómo responderá un público nuevo a un lanzamiento","Porque es demasiado barato","Porque no tiene datos internos","Porque lo prohíbe el código ICC/ESOMAR"], c:0, e:"Hace falta una investigación puntual con un test de concepto."},
+ {p:"AEDEMO, una de las asociaciones que formaron I+A, se fundó en ___ y reunía a…", o:["1968 / profesionales","1978 / empresas","2019 / consumidores","1911 / universidades"], c:0, e:"AEDEMO (1968) agrupaba a profesionales; ANEIMO (1978), a empresas."},
+ {p:"ANEIMO se fundó en ___ y agrupaba a…", o:["1978 / empresas del sector","1968 / profesionales","2019 / consumidores","1990 / anunciantes"], c:0, e:"En 2019 se unió con AEDEMO para formar Insights + Analytics España."},
+ {p:"¿Cuál de estas NO es una actividad de Insights + Analytics España?", o:["Aprobar leyes de investigación de mercados","Organizar congresos y eventos","Formación continua","Autorregulación y deontología"], c:0, e:"No hay ley específica: el sector se autorregula."},
+ {p:"El marco que regula la investigación de mercados en España está formado por…", o:["El RGPD, la LOPD y la autorregulación","Una ley de investigación de mercados de 1968","Solo el Código Civil","Las normas ISO"], c:0, e:"Además del código deontológico del sector."},
+ {p:"Probar distintos envases para ver cuál llama más la atención en el lineal es un…", o:["Estudio de packaging","Test de concepto","Postest","Estudio de cuota"], c:0, e:"Es una aplicación al producto."},
+ {p:"Estudiar si conviene ampliar o reducir las referencias que ofrece una marca es un…", o:["Análisis de gama","Test ciego","Pretest","Estudio de canal"], c:0, e:"Analiza el conjunto de productos que ofrece la empresa."},
+ {p:"Un test de producto <b>no ciego</b> es aquel en el que…", o:["El consumidor ve la marca","No se ve la marca","El producto aún no existe","Solo participan expertos"], c:0, e:"En el test ciego se oculta la marca para eliminar su efecto."},
+ {p:"¿Qué se busca con un test ciego?", o:["Eliminar el efecto de la marca en la percepción","Vender más","Medir el recuerdo de un anuncio","Calcular la cuota de mercado"], c:0, e:"Así se valora solo el producto."},
+ {p:"Las ventas máximas que podría alcanzar todo el sector en un mercado son el…", o:["Potencial de mercado","Cuota de mercado","Mercado real","Postest"], c:0, e:"La cuota es el porcentaje de una marca sobre el total vendido."},
+ {p:"Analizar en qué tiendas y canales se vende un producto y cómo se expone es un…", o:["Estudio de distribución o canal","Test de concepto","Pretest","Estudio de packaging"], c:0, e:"Es una aplicación al mercado."},
+ {p:"Medir el recuerdo, el reconocimiento y el cambio de actitud tras emitir una campaña es un…", o:["Postest","Pretest","Test de concepto","Test ciego"], c:0, e:"Postest = después del lanzamiento."},
+ {p:"Probar varios lemas de campaña con el público antes de elegir uno es un…", o:["Test de eslogan","Postest","Análisis de gama","Estudio de cuota"], c:0, e:"Es una aplicación a la comunicación."},
+ {p:"En el código ICC/ESOMAR, la ICC aporta…", o:["La perspectiva empresarial","El conocimiento técnico","La ley española","Los datos del INE"], c:0, e:"ICC = Cámara de Comercio Internacional (París). ESOMAR aporta el conocimiento técnico y actualiza el código."},
+ {p:"ESOMAR es…", o:["La European Society for Opinion and Market Research","Una ley española","Una herramienta CRM","Un tipo de test"], c:0, e:"Aporta el conocimiento técnico y actualiza el código."},
+ {p:"No revelar la identidad de la persona entrevistada es la garantía de…", o:["Anonimato","Confidencialidad","Consentimiento informado","Objetividad"], c:0, e:"La confidencialidad es no ceder ni usar los datos para otros fines."},
+ {p:"Que el entrevistado acepte tras conocer el objetivo y pueda abandonar sin consecuencias es el…", o:["Consentimiento informado","Anonimato","Sugging","Postest"], c:0, e:"Es un derecho del participante."},
+ {p:"Una ONG llama diciendo que hace una encuesta de hábitos y al final pide una donación. Esto es…", o:["Frugging","Sugging","Test de concepto","Un estudio legítimo"], c:0, e:"Frugging viene de fundraising: pedir dinero simulando un estudio."},
+ {p:"Un comercial hace preguntas «para un estudio» y al terminar intenta venderte una alarma. Esto es…", o:["Sugging","Frugging","Pretest","Anonimato"], c:0, e:"Sugging viene de selling: vender simulando una encuesta."}
+]};
+// Preguntas de desarrollo por tema y apartado (se completan con el índice de los temas 3, 4 y 7)
+const SIM_DES = {};
+
+function simPreguntas(tema){
+  const d=DATA.sistemas, out=[];
+  [3,4,5,6,7].forEach(n=>{ if(tema && tema!==n) return; const t=d.temas.find(x=>x.n===n);
+    (SIM_TT[n]||[]).forEach((q,i)=>out.push({...q, id:`sistemas-tt${n}-q${i}`, tema:n}));
+    if(SIM_PLAN[n]?.test==='Tema entero' && t) t.test.forEach((q,i)=>out.push({...q, id:qid('sistemas',n,i), tema:n}));
+  });
+  return out;
+}
+function simSeccionesHTML(sid){
+  const nT=simPreguntas(0).length, nD=Object.values(SIM_DES).reduce((s,l)=>s+l.length,0);
+  return `<details class="exban" open><summary><b>Qué entra en el examen: tipo test y desarrollo</b></summary><div class="exgrid" style="margin-top:8px">${Object.entries(SIM_PLAN).map(([n,x])=>`<div><b>Tema ${n}</b><ul><li>Tipo test: ${x.test}</li>${x.des?`<li>Desarrollo: ${x.des}</li>`:''}</ul></div>`).join('')}</div></details>
+  <div class="grid" style="margin-bottom:26px">
+    <button class="tcard" onclick="ir('${sid}-tipotest')"><span class="num">APARTADO</span><h3>Tipo test</h3><p>${nT} preguntas de los apartados que entran como test en los temas 3 a 7. Elige un tema o mézclalos.</p></button>
+    <button class="tcard" onclick="ir('${sid}-desarrollo')"><span class="num">APARTADO</span><h3>Desarrollo</h3><p>${nD? `${nD} preguntas largas de los temas 3, 4 y 7 con respuesta modelo e ideas clave.` : 'Preguntas largas de los temas 3, 4 y 7 con respuesta modelo. En preparación.'}</p></button>
+  </div><h2 style="margin:0 0 14px">Temas</h2>`;
+}
+let simTT=0;
+function simTipoTest(sid){
+  const temas=[0,3,4,5,6,7].filter(n=>!n || simPreguntas(n).length);
+  if(!temas.includes(simTT)) simTT=0;
+  const qs=simPreguntas(simTT), n=simTT? qs.length : Math.min(40, qs.length);
+  app.innerHTML = cabSeccion(sid,'Tipo test')+`<span class="eyebrow">SIM · Tipo test</span><h1 style="margin-top:6px">Tipo test</h1>
+  <p class="muted" style="margin:8px 0 18px;max-width:70ch">Solo los apartados que entran como test. Por tema salen todas sus preguntas en orden aleatorio; en «Todos» salen 40 mezcladas de todos los temas. Ves la corrección al momento.</p>
+  <div class="tabs" role="tablist">${temas.map(t=>`<button class="tab" role="tab" aria-selected="${t===simTT}" data-t="${t}">${t?'Tema '+t:'Todos'} <span class="mono muted">${simPreguntas(t).length}</span></button>`).join('')}</div>
+  ${simTT? `<p class="muted" style="margin:-8px 0 16px">Tema ${simTT} · entra: ${SIM_PLAN[simTT].test}</p>`:''}<div id="panel"></div>${pie()}`;
+  app.querySelectorAll('.tab[data-t]').forEach(b=>b.onclick=()=>{ simTT=Number(b.dataset.t); simTipoTest(sid); });
+  quiz($('#panel'), shuffle(qs).slice(0,n), {modo:'tema', clave:`${sid}-tt${simTT}`, sid});
+}
+let simDT=0;
+function simDesarrollo(sid){
+  const temas=Object.keys(SIM_DES).map(Number).filter(n=>SIM_DES[n].length);
+  app.innerHTML = cabSeccion(sid,'Desarrollo')+`<span class="eyebrow">SIM · Desarrollo</span><h1 style="margin-top:6px">Desarrollo</h1>
+  <p class="muted" style="margin:8px 0 18px;max-width:70ch">Preguntas largas de los apartados que entran como desarrollo. Escribe la respuesta como en el examen y compárala con la respuesta modelo y las ideas clave.</p>
+  ${temas.length? `<div class="tabs" role="tablist">${temas.map(t=>`<button class="tab" role="tab" aria-selected="${t===(simDT||temas[0])}" data-t="${t}">Tema ${t} <span class="mono muted">${SIM_DES[t].length}</span></button>`).join('')}</div><div id="panel"></div>` : '<div class="empty">Las preguntas de desarrollo de los temas 3, 4 y 7 están en preparación.</div>'}${pie()}`;
+  if(!temas.length) return;
+  if(!temas.includes(simDT)) simDT=temas[0];
+  app.querySelectorAll('.tab[data-t]').forEach(b=>b.onclick=()=>{ simDT=Number(b.dataset.t); simDesarrollo(sid); });
+  cortasUI($('#panel'), sid, simDT, SIM_DES[simDT], 'd');
+}
+if(DATA.sistemas){ DATA.sistemas.secciones=true; }
+
 ESTUDIO.extra("gestion", {
  1:{cortas:[
   {p:"¿Qué es un emprendedor y qué características lo definen? ¿Tiene que ser totalmente nueva la idea?", r:"Según la RAE, es la «persona que emprende con resolución acciones o empresas innovadoras»: <b>lleva a cabo una idea y asume un riesgo</b>. Es <b>innovador y planificador</b> (se anticipa a los cambios con un plan estratégico) y <b>no tiene miedo al fracaso</b>. La idea <b>no tiene que ser totalmente nueva, pero sí diferente</b>: se consigue observando el mercado y perfilándola (debilidades y fortalezas).", k:["emprende acciones innovadoras","asume un riesgo","innovador y planificador","sin miedo al fracaso","idea diferente, no necesariamente nueva"]},
