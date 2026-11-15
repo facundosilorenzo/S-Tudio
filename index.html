@@ -6435,6 +6435,8 @@ Object.assign(SIM_DES, {
  {ap:"7 y 8", p:"Caso: una academia de idiomas cree que sus clases online atraen a más alumnos que las presenciales. Formula una hipótesis descriptiva, una de relación y una causal, y plantea la pareja H0/H1 de la causal.", r:"<b>Descriptiva</b>: «más del 60 % de los nuevos alumnos de este curso eligió la modalidad online».<br><b>De relación</b>: «los alumnos que viven a más de 10 km de la academia eligen con más frecuencia la modalidad online» (asocia distancia y modalidad, sin decir que una cause la otra).<br><b>Causal</b>: «ofrecer la modalidad online aumenta el número de matrículas».<br><br><b>H0</b>: ofrecer la modalidad online <b>no</b> aumenta el número de matrículas.<br><b>H1</b>: ofrecer la modalidad online <b>sí</b> aumenta el número de matrículas.<br><br>Con los datos de matrículas (por ejemplo, comparando cursos con y sin opción online) se decide si se rechaza H0 a favor de H1. Cada hipótesis debe corresponder a un objetivo del estudio.", k:["descriptiva con un valor","de relación sin causa-efecto","causal","H0 niega el efecto","H1 afirma el efecto","contraste con datos"]}
 ]});
 
+// Selección de 25 preguntas por tema (sin repetidas, cubriendo todos los apartados que entran)
+const SIM_KEEP = {3:new Set(["t3-q0", "t3-q1", "tt3-q0", "tt3-q13", "tt3-q14", "tt3-q3", "tt3-q17", "tt3-q4", "tt3-q18", "tt3-q19", "tt3-q20", "t3-q7", "t3-q8", "t3-q9", "t3-q10", "tt3-q22", "tt3-q23", "tt3-q28", "t3-q13", "tt3-q12", "tt3-q9", "tt3-q10", "tt3-q26", "t3-q11", "t3-q12"]), 4:new Set(["t4-q0", "tt4-q0", "tt4-q13", "tt4-q15", "t4-q5", "tt4-q2", "tt4-q3", "tt4-q4", "tt4-q16", "tt4-q17", "tt4-q5", "t4-q6", "tt4-q20", "tt4-q6", "tt4-q8", "tt4-q19", "tt4-q9", "tt4-q22", "tt4-q23", "tt4-q21", "t4-q11", "tt4-q10", "tt4-q12", "tt4-q26", "tt4-q25"]), 5:new Set(["tt5-q0", "t5-q0", "t5-q1", "tt5-q3", "t5-q2", "tt5-q5", "tt5-q13", "tt5-q7", "tt5-q8", "tt5-q9", "t5-q12", "tt5-q25", "t5-q5", "tt5-q11", "tt5-q12", "tt5-q14", "tt5-q15", "tt5-q16", "t5-q7", "tt5-q19", "t5-q8", "t5-q9", "t5-q10", "t5-q11", "tt5-q27"]), 6:new Set(["t6-q0", "tt6-q1", "tt6-q3", "t6-q1", "t6-q2", "t6-q3", "t6-q4", "t6-q5", "tt6-q11", "tt6-q10", "t6-q6", "t6-q7", "t6-q8", "tt6-q15", "tt6-q19", "t6-q9", "tt6-q21", "t6-q10", "tt6-q23", "t6-q14", "t6-q11", "t6-q12", "t6-q13", "tt6-q25", "tt6-q26"]), 7:new Set(["t7-q1", "t7-q2", "tt7-q0", "tt7-q1", "tt7-q2", "tt7-q3", "tt7-q4", "t7-q3", "t7-q4", "tt7-q17", "tt7-q18", "tt7-q6", "tt7-q19", "tt7-q9", "tt7-q10", "tt7-q11", "t7-q6", "tt7-q21", "tt7-q20", "tt7-q13", "tt7-q22", "tt7-q23", "tt7-q14", "tt7-q25", "tt7-q26"])};
 function simPreguntas(tema){
   const d=DATA.sistemas, out=[];
   [3,4,5,6,7].forEach(n=>{ if(tema && tema!==n) return; const t=d.temas.find(x=>x.n===n);
@@ -6443,7 +6445,7 @@ function simPreguntas(tema){
     const map=SIM_AP_TEMA[n];
     if(t) t.test.forEach((q,i)=>{ if(map && map[i]==null) return; out.push({...tag(map? {...q, ap:map[i]} : q), id:qid('sistemas',n,i), tema:n}); });
   });
-  return out;
+  return out.filter(q=>!SIM_KEEP[q.tema] || SIM_KEEP[q.tema].has(q.id.replace('sistemas-','')));
 }
 function simSeccionesHTML(sid){
   const nT=simPreguntas(0).length, nD=Object.values(SIM_DES).reduce((s,l)=>s+l.length,0);
