@@ -743,7 +743,7 @@ function vistaAsig(sid){
   <div class="subj-head"><div><span class="eyebrow">${a.cod} · ${d.temas.length} temas · ${nq} preguntas</span><h1>${esc(a.nombre)}</h1></div>
     <div class="countdown"><div class="eyebrow">Examen ${fmtFecha(a.examen)}</div><div class="big" style="font-size:2.4rem">${dias>0? dias+' días' : dias===0? 'Hoy':'Hecho'}</div></div></div>
   <div class="actions">
-    <button class="btn primary" onclick="ir('${sid}-simulacro')">Simulacro tipo examen <span class="n">${DATA[sid]?.simulacro?.formato?.nc===0?'test + ejercicios':'test + cortas + ejercicios'}</span></button>
+    <button class="btn primary" onclick="ir('${sid}-simulacro')">Simulacro tipo examen <span class="n">${DATA[sid]?.simulacro?.formato?.nc===0?'test + desarrollo y práctica':'test + desarrollo + práctica'}</span></button>
     ${sid==='ingles'?`<button class="btn" onclick="ir('ingles-writing')">Writing <span class="n">corrige Claude</span></button>`:''}
     <button class="btn" onclick="ir('${sid}-fallos')" ${nf?'':'disabled'}>Repasar mis fallos <span class="n">${nf}</span></button>
     <button class="btn" onclick="ir('${sid}-repaso')">Todas las tarjetas</button>
@@ -839,7 +839,7 @@ function vistaQuiz(sid, modo){
   let titulo='Simulacro de examen';
   if(modo==='fallos'){ preguntas = preguntas.filter(q=>P.fallos[q.id]); titulo='Repaso de fallos'; }
   else {
-    preguntas = preguntas.filter(q=>!fueraSim(d,q.tema));
+    preguntas = preguntas.filter(q=>!fueraSim(d,q.tema) && q.sim!==0);
     // Simulacro: reparto equilibrado entre temas
     const n = Math.min(d.simulacro?.n||25, preguntas.length);
     const porTema={}; preguntas.forEach(q=>(porTema[q.tema]=porTema[q.tema]||[]).push(q));
@@ -1047,38 +1047,48 @@ const nPal = s => (String(s).trim().match(/[A-Za-zÀ-ÿ0-9'’-]+/g)||[]).length
 function vistaExamen(sid){
   const a=asig(sid), d=DATA[sid]; setAcc(sid);
   const MIN = d.simulacro?.examen || 60;
-  // Formato del examen: nº de preguntas y puntos de cada parte (por defecto 20 test · 5 cortas · 2 ejercicios = 3 + 3 + 4)
-  const F={nt:20, nc:5, ne:2, pt:3, pc:3, pe:4, ...(d.simulacro?.formato||{})};
+  // Formato del examen: nº de preguntas y puntos de cada parte (por defecto 20 test · 5 desarrollo · 2 práctica = 4 + 3 + 3)
+  const F={nt:20, nc:5, ne:2, nd:2, pt:4, pc:3, pe:3, ...(d.simulacro?.formato||{})};
   // Parte 1: 20 preguntas tipo test (prioriza las de los puntos de examen si existen)
-  const todas=todasPreguntas(sid).concat(d.glosario? shuffle(preguntasGlosario()).slice(0, todasPreguntas(sid).length) : []).filter(q=>!fueraSim(d,q.tema)), xs=todas.filter(q=>q.x), resto=todas.filter(q=>!q.x);
+  const todas=todasPreguntas(sid).concat(d.glosario? shuffle(preguntasGlosario()).slice(0, todasPreguntas(sid).length) : []).filter(q=>!fueraSim(d,q.tema) && q.sim!==0), xs=todas.filter(q=>q.x), resto=todas.filter(q=>!q.x);
   let test;
   if(xs.length>=8 && !F.mix){ const nx=Math.min(Math.round(F.nt*0.75), xs.length); test=repartir(xs,nx).concat(repartir(resto, F.nt-nx)); }
   else test=repartir(todas, F.nt);
   test = shuffle(test).map(q=>({...q, orden:shuffle(q.o.map((_,i)=>i))}));
   // Parte 2: preguntas cortas (de los puntos de examen; si no hay, a partir de las tarjetas)
-  let poolC=[]; temasSim(d).forEach(t=>(t.cortas||[]).forEach((c,i)=>poolC.push({...c, tema:t.n, id:`${sid}-t${t.n}-c${i}`})));
+  let poolC=[]; temasSim(d).forEach(t=>(t.simCortas||t.cortas||[]).forEach((c,i)=>poolC.push({...c, tema:t.n, id:`${sid}-t${t.n}-${t.simCortas?'s':'c'}${i}`})));
   if(!poolC.length) temasSim(d).forEach(t=>t.flash.forEach((f,i)=>poolC.push({p:f[0], r:f[1], k:[], tema:t.n, id:`${sid}-t${t.n}-f${i}`})));
   const cortas=F.nc? repartir(poolC, F.nc) : [];
   // Parte 3: 1 o 2 ejercicios prácticos (primero los de cálculo)
-  let poolE=[]; temasSim(d).forEach(t=>(t.ejercicios||[]).forEach((x,k)=>poolE.push({...x, tema:t.n, id:`${sid}-t${t.n}-e${k}`})));
-  let ejs=repartir(poolE.filter(x=>x.r!=null), F.ne); if(ejs.length<F.ne) ejs=ejs.concat(repartir(poolE.filter(x=>x.r==null), F.ne-ejs.length));
+  let poolE=[]; temasSim(d).forEach(t=>(t.simEj||t.ejercicios||[]).forEach((x,k)=>poolE.push({...x, tema:t.n, id:`${sid}-t${t.n}-${t.simEj?'p':'e'}${k}`})));
+  let ejs;
+  if(!F.nc){ // Sin preguntas de desarrollo propias: los ejercicios de desarrollo valen la parte de desarrollo y los de cálculo la de práctica
+    const dE=repartir(poolE.filter(x=>x.r==null), F.nd); let pE=repartir(poolE.filter(x=>x.r!=null), F.ne); if(!pE.length) pE=repartir(poolE.filter(x=>x.r==null && !dE.some(y=>y.id===x.id)), F.ne);
+    ejs=dE.map(x=>({...x, pts:F.pc/dE.length, sec:'desarrollo'})).concat(pE.map(x=>({...x, pts:F.pe/pE.length, sec:'práctica'})));
+  } else {
+    ejs = F.mixE? repartir(poolE, F.ne) : repartir(poolE.filter(x=>x.r!=null), F.ne); if(ejs.length<F.ne) ejs=ejs.concat(repartir(poolE.filter(x=>x.r==null && !ejs.some(y=>y.id===x.id)), F.ne-ejs.length));
+    ejs=ejs.map(x=>({...x, pts:F.pe/ejs.length}));
+  }
+  const sumE=ejs.reduce((s,x)=>s+x.pts,0), tituloE=F.nc?'Práctica':'Desarrollo y práctica';
+  const ptsG=ids=>ids.reduce((s,i)=>s+ejs[i].pts,0), idsE=f=>ejs.map((x,i)=>f(x)?i:-1).filter(i=>i>=0);
+  const gruposE=(F.nc? [['Práctica', idsE(()=>true)]] : [['Desarrollo', idsE(x=>x.sec==='desarrollo')], ['Práctica', idsE(x=>x.sec==='práctica')]]).filter(g=>g[1].length);
   const wr = sid==='ingles'? WRITING[Math.floor(Math.random()*WRITING.length)] : null;
-  const ptsC = cortas.length? F.pc/cortas.length : 0, ptsE = ejs.length? F.pe/ejs.length : 0, MAX = F.pt + (cortas.length?F.pc:0) + (ejs.length?F.pe:0);
+  const ptsC = cortas.length? F.pc/cortas.length : 0, MAX = F.pt + (cortas.length?F.pc:0) + sumE;
   const vOk=10/test.length, vMal=4/test.length;
 
   const respT=new Array(test.length).fill(null);
   app.innerHTML = topbar(`<button onclick="ir('')">Inicio</button><span>/</span><button onclick="ir('${sid}')">${esc(a.nombre)}</button><span>/</span><span>Simulacro</span>`)+`
   <h1>Simulacro tipo examen</h1>
-  <p class="muted" style="margin-top:8px;max-width:70ch">Mismo formato que el examen: <b>${test.length} preguntas tipo test</b> (${fmtN(F.pt,0)} puntos)${cortas.length?`, <b>${cortas.length} preguntas cortas</b> (${fmtN(F.pc,0)} puntos)`:''} y <b>${ejs.length} ejercicio${ejs.length===1?'':'s'} práctico${ejs.length===1?'':'s'}</b> (${fmtN(F.pe,0)} puntos)${wr?', más un <b>writing</b> que se corrige aparte':''}. Tienes ${MIN} minutos. Al entregar ves la nota sobre 10.</p>
+  <p class="muted" style="margin-top:8px;max-width:70ch">Mismo formato que el examen: <b>${test.length} preguntas tipo test</b> (${fmtN(F.pt,0)} puntos)${cortas.length?`, <b>${cortas.length} preguntas de desarrollo</b> (${fmtN(F.pc,0)} puntos)`:''} ${cortas.length||gruposE.length<2?'y ':', '}${gruposE.map(([tit,ids])=>`<b>${ids.length} ejercicio${ids.length===1?'':'s'} de ${tit.toLowerCase()}</b> (${fmtN(ptsG(ids),0)} puntos)`).join(' y ')}${wr?', más un <b>writing</b> que se corrige aparte':''}. Tienes ${MIN} minutos. Al entregar ves la nota sobre 10.</p>
   <div class="bar-exam"><span class="timer" id="timer"></span><span class="mono muted" id="prog"></span><button class="btn primary" data-a="entregar">Entregar y corregir</button></div>
   <section class="exam-sec"><header><h2>Parte 1 · Test</h2><span class="mono">${fmtN(F.pt,0)} puntos</span><p>Acierto +${fmtN(vOk,2)} · fallo −${fmtN(vMal,2)} (sobre 10, luego se pasa a ${fmtN(F.pt,0)} puntos) · en blanco 0. Para dejar una en blanco, vuelve a pulsar la opción marcada.</p></header>
     <div class="stack">${test.map((q,i)=>`<div class="eq" data-i="${i}"><div class="qtop"><span class="eyebrow">${i+1} de ${test.length} · Tema ${q.tema}</span></div><div class="qtext">${q.p}</div>
       <div class="opts">${q.orden.map((oi,k)=>`<button class="opt" data-o="${oi}" aria-pressed="false"><span class="l">${'ABCD'[k]}</span><span>${q.o[oi]}</span></button>`).join('')}</div></div>`).join('')}</div></section>
-  ${cortas.length?`<section class="exam-sec"><header><h2>Parte 2 · Preguntas cortas</h2><span class="mono">${fmtN(F.pc,0)} puntos</span><p>Responde con tus palabras, como en el examen. ${fmtN(ptsC,2)} puntos cada una.</p></header>
-    <div class="stack">${cortas.map((c,i)=>`<div class="eq"><span class="eyebrow">Pregunta ${i+1} · Tema ${c.tema}</span><div class="qtext" style="margin-top:6px">${c.p}</div><textarea class="resp" data-c="${i}" placeholder="Tu respuesta…" aria-label="Respuesta a la pregunta corta ${i+1}"></textarea></div>`).join('')}</div></section>`:''}
-  ${ejs.length?`<section class="exam-sec"><header><h2>Parte ${cortas.length?3:2} · Ejercicios prácticos</h2><span class="mono">${fmtN(F.pe,0)} puntos</span><p>Resuélvelos en papel con todos los pasos. ${ejs.some(x=>x.r!=null)?'En los de cálculo escribe aquí el resultado final. ':''}Al corregir podrás subir la foto de tu hoja.</p></header>
-    <div class="stack">${ejs.map((x,i)=>`<div class="eq"><span class="eyebrow">Ejercicio ${i+1} · Tema ${x.tema} · ${fmtN(ptsE,1)} puntos${x.r==null?' · desarrollo':''}</span><div style="margin:6px 0 10px">${x.p}</div>
-      ${x.r!=null?`<div class="ex" style="padding:0;border:0;background:none"><div class="ans"><input data-e="${i}" inputmode="decimal" placeholder="Resultado final" aria-label="Resultado del ejercicio ${i+1}"> <span class="mono muted">${x.u||''}</span></div></div>`:`<textarea class="resp" data-e="${i}" placeholder="Puedes escribir aquí tu resolución o hacerla en papel" aria-label="Resolución del ejercicio ${i+1}"></textarea>`}</div>`).join('')}</div></section>`:''}
+  ${cortas.length?`<section class="exam-sec"><header><h2>Parte 2 · Desarrollo</h2><span class="mono">${fmtN(F.pc,0)} puntos</span><p>Responde con tus palabras, como en el examen. ${fmtN(ptsC,2)} puntos cada una.</p></header>
+    <div class="stack">${cortas.map((c,i)=>`<div class="eq"><span class="eyebrow">Pregunta ${i+1} · Tema ${c.tema}</span><div class="qtext" style="margin-top:6px">${c.p}</div><textarea class="resp" data-c="${i}" placeholder="Tu respuesta…" aria-label="Respuesta a la pregunta de desarrollo ${i+1}"></textarea></div>`).join('')}</div></section>`:''}
+  ${gruposE.map(([tit,ids],g)=>`<section class="exam-sec"><header><h2>Parte ${(cortas.length?3:2)+g} · ${tit}</h2><span class="mono">${fmtN(ptsG(ids),0)} puntos</span><p>Resuélvelos en papel con todos los pasos. ${ids.some(i=>ejs[i].r!=null)?'En los de cálculo escribe aquí el resultado final. ':''}Al corregir podrás subir la foto de tu hoja.</p></header>
+    <div class="stack">${ids.map((i,k)=>{ const x=ejs[i]; return `<div class="eq"><span class="eyebrow">Ejercicio ${k+1} · Tema ${x.tema} · ${fmtN(x.pts,1)} puntos</span><div style="margin:6px 0 10px">${x.p}</div>
+      ${x.r!=null?`<div class="ex" style="padding:0;border:0;background:none"><div class="ans"><input data-e="${i}" inputmode="decimal" placeholder="Resultado final" aria-label="Resultado del ejercicio ${k+1}"> <span class="mono muted">${x.u||''}</span></div></div>`:`<textarea class="resp" data-e="${i}" placeholder="Puedes escribir aquí tu resolución o hacerla en papel" aria-label="Resolución del ejercicio ${k+1}"></textarea>`}</div>`; }).join('')}</div></section>`).join('')}
   ${wr?`<section class="exam-sec"><header><h2>Parte 4 · Writing</h2><span class="mono">aparte</span><p>Se corrige por separado y no suma en la nota de arriba.</p></header>
     <div class="eq"><span class="eyebrow">${esc(wr.t)} · ${wr.w[0]}–${wr.w[1]} words</span><div style="margin:6px 0 10px">${esc(wr.p)}</div><textarea class="resp big" data-w placeholder="Write here…" aria-label="Writing"></textarea><span class="wc" id="wc">0 words</span></div></section>`:''}
   <div class="row" style="margin-top:26px"><button class="btn primary" data-a="entregar">Entregar y corregir</button></div>${pie()}`;
@@ -1095,7 +1105,7 @@ function vistaExamen(sid){
   timerId=setInterval(()=>{ restante--; tEl.textContent=fmtT(Math.max(0,restante)); if(restante<=300) tEl.classList.add('low'); if(restante<=0){ clearInterval(timerId); entregar(true); } },1000);
   app.querySelectorAll('[data-a=entregar]').forEach(b=>b.onclick=()=>{
     const sin=respT.filter(x=>x===null).length, vac=[...app.querySelectorAll('textarea[data-c]')].filter(t=>!t.value.trim()).length;
-    if((sin||vac) && !b.dataset.c){ app.querySelectorAll('[data-a=entregar]').forEach(x=>{ x.dataset.c=1; x.textContent=`Te quedan ${sin} test y ${vac} cortas sin contestar · Entregar igualmente`; }); return; }
+    if((sin||vac) && !b.dataset.c){ app.querySelectorAll('[data-a=entregar]').forEach(x=>{ x.dataset.c=1; x.textContent=`Te quedan ${sin} test y ${vac} de desarrollo sin contestar · Entregar igualmente`; }); return; }
     entregar(false); });
 
   function entregar(porTiempo){
@@ -1119,23 +1129,23 @@ function vistaExamen(sid){
       <div class="row" style="align-items:baseline;gap:18px;margin:8px 0 4px"><div class="score" id="nota"></div><div class="muted" id="notaTxt"></div></div>
       <div class="notas">
         <div><span class="lab">Test · ${fmtN(F.pt,0)} p</span><b>${fmtN(tPts,2)}</b><small>${ok} bien · ${mal} mal · ${bl} en blanco<br>${fmtN(t10,1)} sobre 10</small></div>
-        ${cortas.length?`<div><span class="lab">Cortas · ${fmtN(F.pc,0)} p</span><b id="nC"></b><small id="sC"></small></div>`:''}
-        ${ejs.length?`<div><span class="lab">Ejercicios · ${fmtN(F.pe,0)} p</span><b id="nE"></b><small id="sE"></small></div>`:''}
+        ${cortas.length?`<div><span class="lab">Desarrollo · ${fmtN(F.pc,0)} p</span><b id="nC"></b><small id="sC"></small></div>`:''}
+        ${ejs.length?`<div><span class="lab">${tituloE} · ${fmtN(sumE,0)} p</span><b id="nE"></b><small id="sE"></small></div>`:''}
       </div>
       <p class="pend" id="pend" hidden></p>
       <div class="row" style="margin-top:16px"><button class="btn primary" onclick="render()">Nuevo simulacro</button>${(mal+bl)?`<button class="btn" onclick="ir('${sid}-fallos')">Repasar mis fallos del test</button>`:''}</div>
     </div>
-    ${cortas.length?`<section class="exam-sec"><header><h2>Preguntas cortas</h2><span class="mono">${fmtN(ptsC,2)} p cada una</span><p id="cHint">${SAMPLE?'Claude las está corrigiendo. Si no estás de acuerdo, cambia tú la nota.':'Compara con la respuesta modelo y ponte nota en cada una.'}</p></header>
+    ${cortas.length?`<section class="exam-sec"><header><h2>Desarrollo</h2><span class="mono">${fmtN(ptsC,2)} p cada una</span><p id="cHint">${SAMPLE?'Claude las está corrigiendo. Si no estás de acuerdo, cambia tú la nota.':'Compara con la respuesta modelo y ponte nota en cada una.'}</p></header>
       <div class="stack">${cortas.map((c,i)=>`<div class="eq" data-ci="${i}"><span class="eyebrow">Pregunta ${i+1} · Tema ${c.tema}</span><div class="qtext" style="margin-top:6px">${c.p}</div>
         <span class="lab">Tu respuesta</span><div class="mine">${respC[i].trim()? esc(respC[i]) : '<span class="muted">En blanco</span>'}</div>
         <div class="out" aria-live="polite" style="margin-top:10px"></div>
         <div class="model" style="margin-top:10px">${modeloHTML(c)}${selfMarkHTML(null)}</div></div>`).join('')}</div></section>`:''}
-    ${ejs.length?`<section class="exam-sec"><header><h2>Ejercicios prácticos</h2><span class="mono">${fmtN(ptsE,1)} p cada uno</span><p>Si tu resultado no coincide, sube la foto de tu hoja: Claude puede darte la mitad si el planteamiento es bueno. En los de desarrollo, ponte nota o usa la foto.</p></header>
-      <div class="stack">${ejs.map((x,i)=>`<div class="ex" data-ei="${i}"><span class="eyebrow">Ejercicio ${i+1} · Tema ${x.tema}</span><div class="enun">${x.p}</div>
+    ${gruposE.map(([tit,ids])=>`<section class="exam-sec"><header><h2>${tit}</h2><span class="mono">${fmtN(ptsG(ids),0)} puntos</span><p>Si tu resultado no coincide, sube la foto de tu hoja: Claude puede darte la mitad si el planteamiento es bueno. En los de desarrollo, ponte nota o usa la foto.</p></header>
+      <div class="stack">${ids.map((i,k)=>{ const x=ejs[i]; return `<div class="ex" data-ei="${i}"><span class="eyebrow">Ejercicio ${k+1} · Tema ${x.tema} · ${fmtN(x.pts,1)} p</span><div class="enun">${x.p}</div>
         ${x.r!=null?`<div class="res ${es[i]?'ok':'bad'}">${respE[i].trim()? `Tu resultado: ${esc(respE[i])} ${x.u||''} · ${es[i]?'Correcto':'No coincide'}` : 'Sin resultado'}</div>`:(respE[i].trim()?`<span class="lab">Tu resolución</span><div class="mine">${esc(respE[i])}</div>`:'')}
         <div class="sol">${x.r!=null?`<b>Solución: ${fmtN(x.r,x.dec??2)} ${x.u||''}</b>`:'<b>Solución</b>'}<ol>${x.pasos.map(p=>`<li>${p}</li>`).join('')}</ol></div>
         ${x.r==null||!es[i]? selfMarkHTML(es[i]) : ''}
-        <div class="foto"><div class="row"><button class="btn" data-a="foto" hidden>Corregir con foto</button><input type="file" accept="image/*" capture="environment" hidden></div><span class="hint"></span><div class="corr-out" aria-live="polite"></div></div></div>`).join('')}</div></section>`:''}
+        <div class="foto"><div class="row"><button class="btn" data-a="foto" hidden>Corregir con foto</button><input type="file" accept="image/*" capture="environment" hidden></div><span class="hint"></span><div class="corr-out" aria-live="polite"></div></div></div>`; }).join('')}</div></section>`).join('')}
     ${wr?`<section class="exam-sec"><header><h2>Writing</h2><span class="mono">aparte</span></header><div class="eq" id="wrBox"><span class="eyebrow">${esc(wr.t)} · ${wr.w[0]}–${wr.w[1]} words · tienes ${nPal(wtxt)}</span><div style="margin:6px 0 10px">${esc(wr.p)}</div>
       <span class="lab">Tu texto</span><div class="mine">${wtxt.trim()? esc(wtxt) : '<span class="muted">En blanco</span>'}</div>
       ${wtxt.trim()?`<div class="row" style="margin-top:10px"><button class="btn primary" data-a="ia" ${SAMPLE?'':'hidden'}>Corregir writing con Claude</button><span class="sin-ia muted" ${SAMPLE?'hidden':''}>La corrección del writing funciona al abrir la app desde Claude.</span></div><div class="wout" aria-live="polite" style="margin-top:10px"></div>`:''}</div></section>`:''}
@@ -1144,12 +1154,12 @@ function vistaExamen(sid){
     ${pie()}`;
 
     function recalc(){
-      const sc=cs.reduce((s,v)=>s+(v||0),0)*ptsC, se=es.reduce((s,v)=>s+(v||0),0)*ptsE;
+      const sc=cs.reduce((s,v)=>s+(v||0),0)*ptsC, se=es.reduce((s,v,i)=>s+(v||0)*ejs[i].pts,0);
       const total=tPts+sc+se, nota=total/MAX*10; const pc=cs.filter(v=>v===null).length, pe=es.filter(v=>v===null).length;
       $('#nota').textContent=fmtN(nota,2); $('#notaTxt').textContent = (pc+pe)? 'nota provisional' : (nota>=5?'aprobado':'suspenso');
       if(cortas.length){ $('#nC').textContent=fmtN(sc,2); $('#sC').textContent=`${cs.filter(v=>v!==null).length} de ${cs.length} corregidas`; }
       if(ejs.length){ $('#nE').textContent=fmtN(se,2); $('#sE').textContent=`${es.filter(v=>v!==null).length} de ${es.length} corregidos`; }
-      const pend=$('#pend'); pend.hidden=!(pc+pe); pend.textContent=`Faltan por corregir ${[pc?`${pc} pregunta${pc===1?'':'s'} corta${pc===1?'':'s'}`:'', pe?`${pe} ejercicio${pe===1?'':'s'}`:''].filter(Boolean).join(' y ')}: de momento cuentan como 0.`;
+      const pend=$('#pend'); pend.hidden=!(pc+pe); pend.textContent=`Faltan por corregir ${[pc?`${pc} pregunta${pc===1?'':'s'} de desarrollo`:'', pe?`${pe} ejercicio${pe===1?'':'s'}`:''].filter(Boolean).join(' y ')}: de momento cuentan como 0.`;
       const pct=Math.round(nota*10); const p=P.tests[`${sid}-sim`]||{best:0,intentos:1}; P.tests[`${sid}-sim`]={...p, best:Math.max(p.best||0,pct), last:pct}; save();
     }
     // Cortas: autoevaluación + corrección con Claude
@@ -1980,7 +1990,7 @@ ESTUDIO.ampliar("financiacion", {
 /* Logística de Almacenamiento — contenido elaborado a partir de los apuntes (Temas 1 a 7) */
 ESTUDIO.registrar({
 id: "logistica",
-simulacro: {n: 30, min: 35, formato: {nt: 30, nc: 0, ne: 2, pt: 6, pe: 4, mix: true}},
+simulacro: {n: 30, min: 35, formato: {nt: 30, nc: 0, ne: 2, mix: true}},
 temas: [
 
 /* ======================= TEMA 1 ======================= */
@@ -4376,7 +4386,7 @@ ESTUDIO.ampliar("gestion", {
 /* Negociación Internacional — contenido elaborado a partir de los apuntes (Temas 1 a 7) */
 ESTUDIO.registrar({
 id: "negociacion",
-simulacro: {n: 30, min: 35, fuera: [6, 7]},
+simulacro: {n: 30, min: 35, fuera: [6, 7], formato: {mixE: true}},
 temas: [
 
 /* ======================= TEMA 1 ======================= */
@@ -6593,6 +6603,162 @@ ESTUDIO.extra("negociacion", {
   {p:"<b>Caso práctico.</b> Elige el medio o la figura adecuada en cada caso: (a) traducir un contrato de distribución al alemán; (b) un congreso con 300 asistentes de 5 países; (c) una reunión de tres personas sin cabina; (d) comunicar a un distribuidor que rescindes el contrato con prueba de fecha y contenido; (e) asegurarte de que un cliente recibe un catálogo en papel.", pasos:["(a) <b>Traductor</b>: es un texto escrito.","(b) <b>Interpretación simultánea</b> en cabinas.","(c) <b>Interpretación susurrada (chuchotage)</b>.","(d) <b>Burofax</b>: acredita contenido, emisor y fecha (valor probatorio).","(e) <b>Carta certificada</b>: asegura la recepción, con seguimiento."]}
  ]}
 });
+/* Negociación Internacional: qué entra en el simulacro de examen y de qué forma (test, desarrollo o práctica), según la profesora (17-11-2026) */
+(function(){
+const d=DATA.negociacion; if(!d) return;
+const PLAN={
+1:{
+ examen:["Desarrollo: diferencia entre importación y exportación","Desarrollo: ventajas del comercio internacional (apartado 2)","Desarrollo: qué son las aduanas","Desarrollo: esquema de funcionamiento de una operación de comercio exterior","Desarrollo: definiciones del ICEX y del SOIVRE (no entran en el test)","Test: la Unión Europea y sus instituciones y organismos","Test: el resto del tema"],
+ fueraTest:[9,10],
+ test:[
+  {p:"Vender mercancía española a un cliente de Brasil, que sale del territorio aduanero, es una…", o:["Exportación","Importación","Operación intracomunitaria de compra","Licitación pública"], c:0, e:"Exportar es vender y enviar bienes o servicios a otro país; importar es comprarlos y traerlos de otro país."},
+  {p:"Una empresa de Valencia compra maquinaria a un fabricante japonés y la trae a España. Para la empresa es una…", o:["Importación","Exportación","Venta en el mercado interior","Prospección individual"], c:0, e:"Entra en nuestro país una mercancía comprada en el extranjero."},
+  {p:"¿Cuál NO es una ventaja del comercio internacional según el tema?", o:["Elimina por completo la competencia","Permite especializarse","Genera economías de escala","Estimula la producción, la renta y el empleo"], c:0, e:"Al contrario: aumenta la competencia, lo que mejora rendimiento, precio y tecnología."},
+  {p:"La mayor competencia que trae el comercio internacional provoca…", o:["Mejor rendimiento, precio y tecnología","Precios más altos para el consumidor","Menos variedad de productos","Que desaparezcan las aduanas"], c:0, e:"Es una de las ventajas del comercio internacional."},
+  {p:"Las aduanas son…", o:["Oficinas públicas que controlan la entrada y salida de mercancías de un territorio y cobran sus tributos","Empresas privadas de transporte","Bancos que financian las exportaciones","Ferias de comercio exterior"], c:0, e:"Son el elemento que diferencia el comercio exterior del interior."},
+  {p:"En el esquema de una operación de comercio exterior, ¿qué ocurre justo después del despacho de exportación?", o:["El transporte hasta el país de destino","La firma del contrato","El transporte a los almacenes del importador","La fabricación del producto"], c:0, e:"Contrato → transporte interior y despacho de exportación → transporte internacional → aduana de importación → almacenes del importador."},
+  {p:"¿Cuál es el último paso del esquema de una operación de comercio exterior?", o:["Transporte interior hasta los almacenes del importador","Despacho en la aduana de exportación","Firma del contrato de exportación","Transporte internacional"], c:0, e:"Antes se ha despachado la mercancía en la aduana de importación."},
+  {p:"El mercado único de la UE supone la libre circulación de…", o:["Productos, servicios, personas y capitales","Solo productos","Solo personas","Solo capitales"], c:0, e:"Son las cuatro libertades del mercado único."},
+  {p:"La eurozona está formada por…", o:["Los países de la UE que usan el euro","Todos los países de Europa","Los 27 países de la UE sin excepción","Los países del Espacio Económico Europeo"], c:0, e:"No todos los países de la UE usan el euro."},
+  {p:"¿Qué tratado dio a la UE personalidad jurídica para firmar acuerdos internacionales?", o:["El Tratado de Lisboa","El Tratado de Roma","El Acuerdo de Schengen","El Tratado de Versalles"], c:0, e:"Es una de las ventajas de pertenecer a la UE."},
+  {p:"El Espacio Schengen (1985) supuso…", o:["La eliminación de las fronteras interiores","La creación del euro","La salida del Reino Unido","La creación de la OMC"], c:0, e:"Sin controles fronterizos internos."},
+  {p:"¿Qué instituciones de la UE aprueban las normas?", o:["El Consejo de la UE y el Parlamento Europeo","La Comisión Europea y el Tribunal de Cuentas","El Tribunal de Justicia","El Banco Mundial"], c:0, e:"La Comisión propone; Consejo y Parlamento aprueban."},
+  {p:"La institución que comprueba que los fondos de la UE se recaudan y se usan bien es…", o:["El Tribunal de Cuentas","El Tribunal de Justicia","La Comisión Europea","El Parlamento Europeo"], c:0, e:"El Tribunal de Justicia vela por que la ley se interprete igual en todos los países."},
+  {p:"La principal institución para las relaciones comerciales entre países (debates, negociaciones, normas y acuerdos) es…", o:["La OMC","La OCDE","El FMI","La ICC"], c:0, e:"Organización Mundial del Comercio. En el caso de las aceitunas negras abrió un proceso contra los aranceles de EE. UU."},
+  {p:"El organismo que vela por la estabilidad del sistema monetario internacional es…", o:["El FMI","El Banco Mundial","La UNCTAD","La OMC"], c:0, e:"Fondo Monetario Internacional."},
+  {p:"La Cámara de Comercio Internacional, que fomenta el comercio y la inversión entre empresas, es…", o:["La ICC","La UNCTAD","La OCDE","La OMC"], c:0, e:"International Chamber of Commerce."}
+ ],
+ des:[
+  {p:"Explica la diferencia entre importación y exportación. Pon un ejemplo de cada una.", r:"La <b>exportación</b> es la <b>venta</b> de bienes o servicios a un cliente de <b>otro país</b>: la mercancía <b>sale</b> de nuestro territorio aduanero (por ejemplo, una bodega de Logroño vende vino a un importador de Canadá). La <b>importación</b> es la <b>compra</b> de bienes o servicios a un proveedor de <b>otro país</b>: la mercancía <b>entra</b> en nuestro territorio (por ejemplo, una tienda española compra ventiladores a un fabricante chino). Las dos son comercio exterior y, a diferencia del comercio interior, pasan por las <b>aduanas</b> (despacho de exportación en origen y de importación en destino).", k:["Exportar = vender / la mercancía sale del país","Importar = comprar / la mercancía entra en el país","Un ejemplo de cada una","Ambas pasan por la aduana"]},
+  {p:"¿Qué es el comercio internacional y qué ventajas tiene?", r:"Es el <b>intercambio de bienes o servicios entre dos o más países</b>. Ventajas: 1) permite a cada país <b>especializarse</b> en lo que produce mejor; 2) genera <b>economías de escala</b> (producir más abarata cada unidad); 3) <b>estimula la producción, la renta y el empleo</b>; 4) aumenta la <b>competencia</b>, lo que mejora el <b>rendimiento, el precio y la tecnología</b>. Los países industrializados exportan sobre todo manufacturas y los países en desarrollo, productos primarios.", k:["Definición: intercambio entre dos o más países","Especialización","Economías de escala","Más producción, renta y empleo","Más competencia: mejor rendimiento, precio y tecnología"]},
+  {p:"¿Qué son las aduanas y por qué diferencian el comercio exterior del comercio interior?", r:"Las <b>aduanas</b> son las <b>oficinas públicas</b> situadas en fronteras, puertos y aeropuertos que <b>controlan la entrada y salida de mercancías</b> de un territorio, comprueban la documentación y <b>cobran los aranceles e impuestos</b> que correspondan. Son la <b>frontera económica</b> entre países: en el comercio interior no existen, mientras que en el comercio exterior toda operación pasa por el <b>despacho de exportación</b> en origen y el <b>despacho de importación</b> en destino.", k:["Oficinas públicas en fronteras, puertos y aeropuertos","Controlan entrada y salida de mercancías","Cobran aranceles e impuestos","Son lo que diferencia el comercio exterior del interior","Despacho de exportación y de importación"]},
+  {p:"Explica el esquema de funcionamiento de una operación de comercio exterior, paso a paso.", r:"1) El exportador firma el <b>contrato de exportación</b> con el importador, con las condiciones de entrega. 2) <b>Transporte interior</b> hasta el recinto aduanero y <b>despacho de exportación</b>. 3) <b>Transporte internacional</b> hasta el país de destino. 4) Entrada en la <b>aduana de importación</b> y despacho. 5) <b>Transporte interior</b> hasta los almacenes del importador.", k:["Contrato de exportación","Transporte interior y despacho de exportación","Transporte internacional","Aduana de importación","Transporte hasta los almacenes del importador"]},
+  {p:"Define el ICEX y el SOIVRE y explica para qué sirve cada uno.", r:"El <b>ICEX</b> (España Exportación e Inversiones) es una <b>entidad pública nacional</b> que <b>promueve las exportaciones españolas</b> y la <b>inversión extranjera en España</b>: ayuda a las empresas a salir al exterior con información, formación y promoción. El <b>SOIVRE</b> es el <b>servicio de inspección</b> de la Dirección General de Comercio e Inversiones: <b>controla la calidad comercial</b> de los productos de comercio exterior y <b>asesora técnicamente</b>; es una garantía de calidad y seguridad de las exportaciones españolas.", k:["ICEX: entidad pública nacional","ICEX: promueve exportaciones e inversión extranjera en España","SOIVRE: servicio de inspección (Dirección General de Comercio e Inversiones)","SOIVRE: controla la calidad comercial y asesora"]}
+ ],
+ pra:[]
+},
+2:{
+ examen:["Test: tipos de estudio de mercado y mercados potenciales","Desarrollo (muy importante): figuras comerciales, saber diferenciarlas e identificarlas: distribuidor, representante comercial y agente comercial","Desarrollo: tipos de proveedores: fabricantes, distribuidores, independientes e importadores","Test: selección de proveedores","Test: apartado 7 (margen de negociación)"],
+ test:[
+  {p:"Una persona firma en nombre de tu empresa un contrato con un cliente alemán. Es…", o:["Un representante comercial","Un agente comercial","Un distribuidor","Un proveedor independiente"], c:0, e:"Solo el representante tiene poder legal para firmar acuerdos en nombre de la empresa."},
+  {p:"Una persona visita clientes en Italia, les ofrece tus productos y te pasa los pedidos, pero solo negocia lo que le autorizas. Es…", o:["Un agente comercial","Un representante comercial","Un distribuidor","Un importador"], c:0, e:"Vende, ofrece y tramita pedidos; solo negocia lo autorizado."},
+  {p:"Una empresa de Chile compra tu producto, lo revende allí y además se encarga del servicio técnico. Es…", o:["Un distribuidor","Un agente comercial","Un representante comercial","Un fabricante"], c:0, e:"El distribuidor es responsable del producto e incluso del servicio técnico."},
+  {p:"Un mayorista nacional que vende artículos traídos del extranjero es un…", o:["Importador","Fabricante","Proveedor independiente","Agente comercial"], c:0, e:"Funciona como un distribuidor, pero con productos extranjeros."},
+  {p:"Los distribuidores o mayoristas…", o:["Compran grandes cantidades al fabricante y venden a minoristas","Transforman la materia prima","Son autónomos con creaciones únicas","Solo firman contratos en nombre de otros"], c:0, e:"Por eso sus precios son mayores que los del fabricante."},
+  {p:"¿Dónde NO se suele buscar proveedores según el tema?", o:["En el registro civil","En los proveedores de la competencia","En ferias y exposiciones","En cámaras de comercio y asociaciones"], c:0, e:"También: recomendaciones de trabajadores, publicaciones, internet y directorios."},
+  {p:"El margen de negociación es…", o:["Dinámico: cambia según el país y la cultura","Fijo para todas las negociaciones","Siempre el límite superior del vendedor","Lo que fija la aduana"], c:0, e:"Por ejemplo, en Latinoamérica se empieza muy exigente y se va rebajando."},
+  {p:"El límite superior de cada parte en una negociación es…", o:["Su mejor opción","La última opción para seguir negociando","El precio de la aduana","El MOQ"], c:0, e:"El límite inferior es la última opción para seguir; por debajo, se rompe."}
+ ],
+ des:[
+  {p:"Explica las diferencias entre representante comercial, agente comercial y distribuidor. ¿Cómo identificas cada figura?", r:"El <b>representante comercial</b> pone en contacto a la empresa con los clientes y <b>firma acuerdos en su nombre</b>: tiene <b>poder legal</b> para cerrar contratos. El <b>agente comercial</b> <b>vende, ofrece los productos y tramita los pedidos</b>, pero <b>solo negocia lo que la empresa le autoriza</b> y no firma en su nombre. El <b>distribuidor</b> compra el producto y lo revende: es <b>responsable del producto</b> e incluso del <b>servicio técnico</b>. Para identificarlos: si <b>firma en nombre</b> de la empresa → representante; si solo <b>busca clientes y pasa pedidos</b> dentro de lo autorizado → agente; si <b>compra, revende y responde del producto y la posventa</b> → distribuidor.", k:["Representante: firma en nombre de la empresa (poder legal)","Agente: vende y tramita pedidos, solo negocia lo autorizado","Distribuidor: responsable del producto y del servicio técnico","Criterio para identificarlos"]},
+  {p:"<b>Caso.</b> Identifica qué figura es cada una y justifica: (a) Laura viaja por Francia, presenta el catálogo y envía los pedidos a la fábrica, pero no puede cambiar precios; (b) una empresa de Perú compra 2.000 unidades, las vende en su país y repara las averías; (c) Marco firma en nombre de tu empresa el contrato anual con un hotel de Roma; (d) una empresa de Sevilla vende en España relojes que trae de Suiza.", r:"(a) <b>Agente comercial</b>: ofrece los productos y tramita pedidos, pero solo negocia lo autorizado. (b) <b>Distribuidor</b>: compra, revende y es responsable del producto y del servicio técnico. (c) <b>Representante comercial</b>: firma acuerdos en nombre de la empresa (poder legal). (d) <b>Importador</b>: como un mayorista nacional, pero con artículos del extranjero.", k:["(a) Agente comercial","(b) Distribuidor","(c) Representante comercial","(d) Importador","Justificación de cada una"]},
+  {p:"¿Qué tipos de proveedores existen? Explica cada uno e indica cuál ofrece los precios más bajos.", r:"<b>Fabricantes</b>: transforman la materia prima en producto terminado; tienen los <b>precios más bajos</b>. <b>Distribuidores (mayoristas)</b>: compran grandes cantidades al fabricante y venden a minoristas, con precios mayores. <b>Independientes</b>: autónomos que distribuyen en exclusiva sus <b>creaciones únicas</b>. <b>Importadores</b>: como un mayorista nacional, pero con artículos <b>del extranjero</b>.", k:["Fabricantes: precios más bajos","Distribuidores o mayoristas","Independientes: autónomos con creaciones únicas","Importadores: artículos del extranjero"]}
+ ],
+ pra:[]
+},
+3:{
+ examen:["Todo el tema es muy importante","Test: cómo localizar proveedores","Test: tipos de directorios, ventajas y desventajas","Test, desarrollo o práctica: el e-marketplace","Test, desarrollo o práctica: el dropshipping","Test: ferias internacionales","Desarrollo o práctica (entra sí o sí): solicitud de cotización (RFQ) y MOQ"],
+ test:[
+  {p:"¿Cuál es un directorio NACIONAL de proveedores según el tema?", o:["Kompass","Alibaba","Aliexpress","Indiamart"], c:0, e:"Nacionales: Thomasnet, Makers Row, MFG y Kompass."},
+  {p:"La principal VENTAJA de los directorios de proveedores es…", o:["Su coste bajo o nulo y las muchas opciones","Que toda la información está verificada","Que solo acceden empresas","Que incluyen el transporte"], c:0, e:"El inconveniente es la falta de veracidad."},
+  {p:"¿De qué países son los proveedores extranjeros más buscados?", o:["China, India y Taiwán","Francia, Italia y Alemania","EE. UU., Canadá y México","Brasil, Chile y Perú"], c:0, e:"Según el tema."},
+  {p:"Un e-marketplace es…", o:["Un espacio virtual que reúne a compradores y vendedores sin la barrera de la distancia","Una feria física internacional","Un tipo de aduana","Un almacén del dropshipper"], c:0, e:"Puede ser B2B, B2C o C2C, general o sectorial."},
+  {p:"Un marketplace donde solo compran y venden empresas entre sí es…", o:["B2B","B2C","C2C","D2C"], c:0, e:"Business to Business."},
+  {p:"Un marketplace especializado en un solo sector o servicio es…", o:["Sectorial","General","C2C","Inverso"], c:0, e:"Los generales venden todo tipo de productos."},
+  {p:"¿Qué se ahorra el vendedor al usar un e-marketplace?", o:["Infraestructura y publicidad, a cambio de una comisión","Todos los impuestos","El producto","La atención al cliente"], c:0, e:"Además tiene un gran escaparate."},
+  {p:"En el dropshipping, ¿qué gana el vendedor de la web?", o:["Una comisión como intermediario","El margen del fabricante entero","Nada, lo hace gratis","El coste del envío"], c:0, e:"El dropshipper envía directamente al cliente."},
+  {p:"¿Por qué el dropshipping permite probar productos nuevos con poco riesgo?", o:["Porque no hay que comprar stock por adelantado","Porque el proveedor regala el producto","Porque no hay clientes","Porque lo paga la plataforma"], c:0, e:"No hay inventario ni almacén."},
+  {p:"Las ferias internacionales son…", o:["Encuentros donde empresas del mismo sector exponen sus productos a los clientes","Visitas de un solo empresario a un país","Directorios online","Marketplaces C2C"], c:0, e:"Es una de las acciones de promoción exterior."},
+  {p:"El empresario que viaja a otro país para contactar y cerrar acuerdos hace una…", o:["Acción comercial","Acción comercial inversa","Feria internacional","Licitación"], c:0, e:"En la inversa se invita a las empresas extranjeras a venir."},
+  {p:"¿Por qué un proveedor fija un MOQ?", o:["Porque tiene más trabajo del que puede atender o solo trabaja con grandes empresas","Porque la ley lo obliga","Porque así lo exige la aduana","Porque no quiere vender"], c:0, e:"Y es negociable."},
+  {p:"Si el MOQ del proveedor es mayor que lo que necesitas, una propuesta razonable es…", o:["Unirte a la producción de un cliente grande o aceptar su producto más fabricado","Pagar sin negociar nada","Cancelar la empresa","Pedir el triple"], c:0, e:"También pedir su catálogo en stock o comprar a precio minorista en su web o en Aliexpress."},
+  {p:"¿Qué datos se piden normalmente en una RFQ?", o:["Productos, unidades mínimas, coste unitario, entrega y forma de pago","Solo el nombre del proveedor","La declaración de la renta","El balance del proveedor"], c:0, e:"Además de los datos de contacto."}
+ ],
+ des:[
+  {p:"¿Qué es un e-marketplace? Explica sus tipos, ventajas y desventajas.", r:"Es un <b>espacio virtual que reúne a compradores y vendedores</b> sin la barrera de la distancia. Tipos según quién participa: <b>B2B</b> (entre empresas), <b>B2C</b> (de empresa a consumidor final) y <b>C2C</b> (entre consumidores). Según lo que ofrece: <b>generales</b> (todo tipo de productos) o <b>sectoriales</b> (servicios o productos especializados). <b>Ventajas</b>: ahorro en <b>infraestructura</b> (a cambio de una comisión) y en <b>publicidad</b>, y un <b>gran escaparate</b>. <b>Desventajas</b>: <b>más competencia</b> y la obligación de <b>cumplir las reglas</b> del marketplace.", k:["Definición","B2B, B2C y C2C","Generales y sectoriales","Ventajas: ahorro en infraestructura y publicidad, escaparate","Desventajas: competencia y reglas"]},
+  {p:"Explica qué es el dropshipping, cómo funciona y qué ventajas tiene.", r:"Es un modelo de venta online en el que <b>no tienes stock</b>: 1) creas una <b>web</b> donde publicas productos que el cliente paga; 2) informas del pedido al <b>fabricante o mayorista (el dropshipper)</b>, que lo <b>envía directamente al cliente</b>; 3) tú ganas una <b>comisión</b> como intermediario. Ventajas: <b>baja inversión inicial</b>, <b>gran variedad de productos</b> casi de inmediato, <b>menos riesgo</b> al probar productos nuevos, <b>ahorro de tiempo</b> en gestión y <b>sin inventario ni almacén</b>.", k:["Web propia y cliente que paga","El dropshipper envía directamente al cliente","El vendedor gana una comisión","Ventajas: poca inversión, variedad, menos riesgo, ahorro de tiempo, sin almacén"]},
+  {p:"¿Qué es una solicitud de cotización (RFQ)? ¿Qué incluye y qué consejos hay que seguir al redactarla?", r:"La <b>RFQ</b> (Request for Quotation) es la <b>carta o correo con el que el comprador pide formalmente al proveedor una oferta detallada</b>. Incluye: <b>datos de contacto</b>, <b>productos</b> que se quieren, <b>unidades mínimas</b> (MOQ), <b>coste unitario</b>, <b>plazo y forma de entrega</b> y <b>forma de pago</b>. Consejos: escribir <b>correos breves</b>, <b>no pedir demasiada información al principio</b> y usar un <b>lenguaje sencillo</b>, porque los proveedores reciben muchas solicitudes y pueden usar traductores.", k:["Definición: petición formal de oferta","Contenido: contacto, producto, unidades mínimas, precio unitario, entrega, pago","Consejos: breve, sin pedir demasiado, lenguaje sencillo"]},
+  {p:"¿Qué es el MOQ? ¿Por qué lo fijan los proveedores y cómo se puede negociar?", r:"El <b>MOQ</b> (Minimum Order Quantity) es la <b>cantidad mínima de pedido</b> que exige un proveedor para venderte a ese precio: «MOQ 3.000» significa que hay que comprar al menos 3.000 unidades. Lo fijan porque <b>tienen más trabajo del que pueden atender</b> o porque <b>solo quieren trabajar con grandes empresas</b>. <b>Es negociable</b>: se puede proponer aceptar también el <b>producto que más fabrica</b> el proveedor, <b>añadir nuestro pedido a la producción de un cliente grande</b> o pedir su <b>catálogo en stock</b>. Si no hay acuerdo, se puede <b>comprar en su web o en Aliexpress a precio minorista</b> (más caro por unidad, pero sin comprar de más).", k:["Cantidad mínima de pedido","Por qué lo fijan: exceso de trabajo o solo grandes empresas","Es negociable","Propuestas para negociarlo","Alternativa: comprar a precio minorista"]}
+ ],
+ praExist:[0],
+ pra:[
+  {p:"<b>MOQ.</b> Un proveedor de Alibaba vende un ventilador a <b>2,40 €/ud</b> con un MOQ de <b>3.000 unidades</b>. Tú solo necesitas <b>1.000</b>, que puedes comprar en Aliexpress a precio minorista a <b>4,10 €/ud</b>. ¿Cuántos euros más tendrías que desembolsar si aceptas el MOQ en lugar de comprar solo las 1.000 a precio minorista?", r:3100, dec:2, u:"€", pasos:["Aceptando el MOQ pagas 3.000 × 2,40 = <b>7.200 €</b>.","Comprando solo lo que necesitas: 1.000 × 4,10 = <b>4.100 €</b>.","Diferencia: 7.200 − 4.100 = <b>3.100 €</b> más.","Aunque el precio unitario del MOQ es menor, desembolsas más y te quedan 2.000 unidades en stock: conviene negociar el MOQ o comprar a precio minorista."]},
+  {p:"<b>MOQ.</b> Necesitas <b>350</b> mochilas. El proveedor las vende a <b>6 €/ud</b>, pero su MOQ es de <b>500</b> unidades. Si aceptas el MOQ y solo usas 350, ¿cuál es el coste real de cada mochila que usas?", r:8.57, dec:2, u:"€/ud", pasos:["Pedido mínimo: 500 × 6 = <b>3.000 €</b>.","Coste real por mochila usada: 3.000 ÷ 350 = <b>8,57 €/ud</b>.","Si en otra web te las venden a menos de 8,57 €/ud sin mínimo, te sale más barato comprar solo las 350."]},
+  {p:"<b>Dropshipping.</b> Vendes en tu web una funda de móvil a <b>25 €</b>. El dropshipper te cobra <b>14 €</b> por unidad (envío al cliente incluido) y la pasarela de pago se queda <b>1 €</b> por venta. Si vendes <b>120</b> fundas al mes, ¿cuánto ganas al mes?", r:1200, dec:2, u:"€", pasos:["Ganancia por unidad: 25 − 14 − 1 = <b>10 €</b>.","Al mes: 120 × 10 = <b>1.200 €</b>.","No has tenido que comprar stock ni tener almacén: el dropshipper envía directamente al cliente."]},
+  {p:"<b>Caso.</b> Quieres empezar a vender camisetas estampadas sin apenas dinero ni almacén. Compara dos opciones: (1) abrir tu web y trabajar en <b>dropshipping</b>; (2) vender en un <b>e-marketplace</b> comprando tú el stock. Explica cómo funcionaría cada una, qué tipo de marketplace sería (B2B, B2C o C2C) y qué ventajas y desventajas tiene cada opción.", pasos:["<b>Dropshipping</b>: publicas las camisetas en tu web; cuando el cliente paga, pasas el pedido al dropshipper, que la envía directamente; ganas una comisión.","Ventajas: baja inversión, sin stock ni almacén, variedad y poco riesgo al probar diseños. Inconveniente: no controlas el stock ni el envío y tu margen es la comisión.","<b>Marketplace</b>: vendes a consumidores finales, así que es <b>B2C</b> (sería C2C si vendieras como particular).","Ventajas: ahorras infraestructura y publicidad (pagas comisión) y tienes un gran escaparate. Desventajas: mucha competencia y cumplir las reglas de la plataforma; además, aquí compras tú el stock.","Conclusión razonada: con poco dinero y sin almacén encaja mejor el dropshipping, o combinarlo con un marketplace."]},
+  {p:"<b>Caso MOQ.</b> Un hipermercado quiere 1.000 ventiladores portátiles de un proveedor de Alibaba, pero su MOQ es de 3.000. Redacta las propuestas que harías al proveedor para negociar el MOQ y qué harías si no hay acuerdo.", pasos:["Entender el MOQ: el precio publicado exige comprar al menos 3.000 unidades; es negociable.","Propuesta 1: aceptar también otro modelo, el producto que más fabrica el proveedor, hasta completar el volumen.","Propuesta 2: añadir nuestro pedido a la producción de un cliente grande del proveedor.","Propuesta 3: pedir su catálogo de producto ya en stock.","Si no hay acuerdo: comprar las 1.000 en su web o en Aliexpress a precio minorista (más caro por unidad, sin comprar de más) o buscar otro proveedor."]}
+ ]
+},
+4:{
+ examen:["Test: tipos de cliente","Test: clientes activos e inactivos (saber identificar cuándo un cliente está inactivo)","Test: clasificación de clientes","Test: imagen positiva, negativa y neutra","Test: modelos de bases de datos"],
+ fueraTest:[8],
+ test:[
+  {p:"Un cliente que compra a la empresa de forma regular en la actualidad es un cliente…", o:["Activo","Inactivo","Potencial","Perdido sin remedio"], c:0, e:"Los activos compran actualmente; los inactivos compraron en el pasado pero han dejado de hacerlo."},
+  {p:"Un cliente que compraba a la empresa pero lleva mucho tiempo sin hacer ningún pedido es un cliente…", o:["Inactivo","Activo","Frecuente","Potencial"], c:0, e:"Hay que intentar reactivarlo: es más fácil que captar uno nuevo."},
+  {p:"¿Cuál de estas situaciones indica que un cliente está INACTIVO?", o:["Su último pedido fue hace más de un año y no ha vuelto a comprar","Compra todos los meses","Acaba de hacer su primer pedido","Ha pedido un presupuesto por primera vez"], c:0, e:"Fue cliente, pero ha dejado de comprar durante un periodo largo."},
+  {p:"Una empresa que todavía no te ha comprado, pero podría hacerlo porque encaja con tu mercado, es un cliente…", o:["Potencial","Inactivo","Activo","Habitual"], c:0, e:"Los clientes actuales pueden ser activos o inactivos."},
+  {p:"Para recuperar a un cliente inactivo, el tema recomienda…", o:["Una oferta con un tiempo límite","Borrarlo de la base de datos","Subirle el precio","No volver a contactarlo"], c:0, e:"Reactivar clientes antiguos es más fácil que captar nuevos."},
+  {p:"Un cliente que compra de vez en cuando, sin regularidad, es un cliente…", o:["Ocasional","Frecuente","Habitual","De volumen alto"], c:0, e:"Por frecuencia: frecuente, habitual y ocasional."},
+  {p:"Al cliente habitual se le ofrece sobre todo…", o:["Seguimiento e información","Servicio personalizado y especial atención","Nada, porque ya compra","Solo descuentos"], c:0, e:"El servicio personalizado y la especial atención son para el frecuente."},
+  {p:"Un cliente cuyas compras coinciden con la media tiene un volumen…", o:["Medio","Alto","Bajo","Ocasional"], c:0, e:"Alto: por encima de la media; bajo: por debajo."},
+  {p:"Un cliente con mala reputación en el mercado (impagos, conflictos, malas opiniones) tiene una imagen…", o:["Negativa","Positiva","Neutra","Relacional"], c:0, e:"Clasificación por la imagen en el mercado: positiva, neutra o negativa."},
+  {p:"Un cliente sin una reputación destacada, ni buena ni mala, tiene una imagen…", o:["Neutra","Positiva","Negativa","Jerárquica"], c:0, e:"La positiva es la de los líderes del sector."},
+  {p:"Según su posición en el canal, ¿quién es el último eslabón antes del consumidor final?", o:["El minorista","El mayorista","El productor","El fabricante"], c:0, e:"Los mayoristas nunca tratan con el consumidor final."},
+  {p:"El modelo de base de datos parecido al jerárquico pero que puede relacionarse con otras estructuras, y por eso es más complejo, es el…", o:["Modelo en red","Modelo relacional","Modelo plano","Modelo en árbol"], c:0, e:"El jerárquico tiene forma de árbol invertido."},
+  {p:"En el modelo relacional, las tablas se relacionan mediante…", o:["Campos o registros comunes","Una única raíz","Gráficas circulares","Carpetas físicas"], c:0, e:"Es el modelo más utilizado."},
+  {p:"¿Cuál NO es un elemento de una base de datos?", o:["La ponderación","El campo","El registro","El atributo"], c:0, e:"Elementos: datos, atributos, campos, registros y archivo."}
+ ],
+ des:[],
+ pra:[]
+},
+5:{
+ examen:["Todo el documento del tema 5 (sistemas CRM y ERP): test, desarrollo y práctica","CRM: definición, marketing relacional, ventajas, beneficios y clasificación (operativo, analítico y colaborativo)","ERP: definición, ventajas y clasificación (en local o en la nube; a medida o predefinido)","Diferencias entre CRM y ERP; ejemplos (HubSpot, Salesforce, Holded / SAP, Microsoft Dynamics, Odoo; Zara y Mercadona)","Aplicaciones y limitaciones de las TIC en la negociación internacional"],
+ fueraTest:[10],
+ test:[
+  {p:"¿Qué significan las siglas CRM?", o:["Customer Relationship Management","Customer Resource Management","Commercial Relationship Model","Central Resource Manager"], c:0, e:"Gestión de la relación con el cliente."},
+  {p:"¿Qué significan las siglas ERP?", o:["Enterprise Resource Planning","Enterprise Relationship Program","External Resource Process","Enterprise Retail Planning"], c:0, e:"Planificación de los recursos de la empresa."},
+  {p:"El marketing relacional es una estrategia que busca…", o:["Construir relaciones a largo plazo con los clientes para fomentar su lealtad y satisfacción","Vender una sola vez al máximo precio","Reducir el número de clientes","Controlar el stock del almacén"], c:0, e:"Y aumentar el valor de vida del cliente para la empresa. El CRM se relaciona con él."},
+  {p:"Según el tema, las nuevas tecnologías son una variable estratégica que afecta a…", o:["La satisfacción de los clientes, la optimización del tiempo y la capacidad de adaptación a los cambios","Solo al precio","Solo a la contabilidad","Solo a la logística"], c:0, e:"Son clave para la competitividad entre empresas."},
+  {p:"¿Cuál es una ventaja del CRM?", o:["Centralizar toda la información de los clientes","Controlar el stock en tiempo real","Gestionar las nóminas","Calcular aranceles"], c:0, e:"También: conocer mejor a los clientes, aumentar ventas, satisfacción y lealtad."},
+  {p:"¿Cuál es una ventaja del ERP?", o:["Integrar y optimizar todos los procesos de la empresa","Hablar con los clientes por chat","Diseñar campañas de email","Segmentar a los clientes de una tienda"], c:0, e:"Además aumenta la productividad y el control y optimiza el tiempo."},
+  {p:"La idea de «datos y no suposiciones» se asocia a…", o:["El CRM: decidir con la información real de los clientes","Las ferias internacionales","El MOQ","El Tratado de Lisboa"], c:0, e:"El CRM guarda toda la información de los clientes en un mismo programa."},
+  {p:"¿Qué beneficio aporta un CRM a la comunicación interna?", o:["Todos conocen los mismos datos de cada cliente","Elimina la necesidad de comerciales","Sustituye a la contabilidad","Controla la producción"], c:0, e:"Mejora la comunicación interna y externa."},
+  {p:"¿Cuál de estos es un ejemplo de CRM?", o:["HubSpot","SAP","Odoo ERP","Microsoft Excel"], c:0, e:"Ejemplos de CRM: HubSpot, Salesforce, Holded, Zoho CRM."},
+  {p:"¿Cuál de estos es el ERP más utilizado del mundo según el tema?", o:["SAP","HubSpot","Salesforce","Zoho"], c:0, e:"Otros ERP: Microsoft Dynamics 365 y Odoo."},
+  {p:"Un ERP instalado en el propio sistema informático de la empresa es un ERP…", o:["En local","En la nube","Predefinido","Colaborativo"], c:0, e:"El de la nube se maneja desde cualquier lugar."},
+  {p:"El ERP que se diseña desde cero para una empresa concreta, y por eso es más costoso, es el de…", o:["Diseño a medida","Diseño predefinido","Instalación en la nube","Tipo analítico"], c:0, e:"El predefinido es más económico y rápido."},
+  {p:"El CRM operativo se encarga de…", o:["La gestión de marketing, ventas y servicio al cliente","Almacenar datos para tomar decisiones","Hablar con los clientes por chat y email","Controlar las nóminas"], c:0, e:"El analítico almacena datos; el colaborativo permite la interacción directa."},
+  {p:"Mientras el ERP se enfoca en reducir costes haciendo más eficientes los procesos, el CRM busca…", o:["Incrementar las ventas","Reducir la plantilla","Controlar el inventario","Pagar a los proveedores"], c:0, e:"Ambos mejoran la eficiencia de los procesos comerciales."},
+  {p:"¿Quién utiliza principalmente un CRM?", o:["Ventas, marketing y atención al cliente","Solo el almacén","Solo contabilidad","Solo producción"], c:0, e:"El ERP lo usan todos los departamentos."},
+  {p:"La instalación del CRM, frente a la del ERP, es…", o:["Fácil","Más compleja","Imposible en pymes","Siempre a medida"], c:0, e:"El ERP tiene instalación más compleja y coste más elevado."},
+  {p:"Zara recomienda prendas según tu historial de compras y te recuerda el carrito abandonado. Está usando…", o:["Un CRM","Un ERP","Un MOQ","Un directorio de proveedores"], c:0, e:"Conoce los intereses del cliente y personaliza su experiencia."},
+  {p:"En Mercadona, cuando se vende un pack de leche el stock se actualiza y, si baja del mínimo, se genera un pedido de reposición. Es un ejemplo de…", o:["ERP","CRM colaborativo","Marketing relacional","Dropshipping"], c:0, e:"El ERP conecta tiendas, almacenes, logística, compras, finanzas y dirección."},
+  {p:"¿Cuál es una aplicación de las TIC en la negociación internacional?", o:["Facilitar los trámites administrativos (burocracia online)","Eliminar las aduanas","Sustituir los contratos","Fijar el MOQ"], c:0, e:"También mejoran la administración, la comunicación y el rendimiento con el trabajo en red."},
+  {p:"¿Cuál es una limitación del uso de TIC especializadas en la negociación internacional?", o:["La falta de personal cualificado para utilizarlas","Que mejoran la comunicación","Que facilitan los trámites","Que permiten trabajar en red"], c:0, e:"Otras: ya cuentan con TIC anteriores, no las ven necesarias, falta de formación, alto coste, dificultad de acceso, preferencia por el cara a cara y falta de infraestructura."}
+ ],
+ des:[
+  {p:"Explica qué es un CRM, su relación con el marketing relacional y sus ventajas.", r:"El <b>CRM</b> (Customer Relationship Management) es una <b>aplicación que gestiona toda la relación con los clientes</b>, centralizando su información en una única plataforma y facilitando el acceso a ella. Se relaciona con el <b>marketing relacional</b>, la estrategia que busca <b>relaciones a largo plazo</b> con los clientes para fomentar su <b>lealtad y satisfacción</b> y aumentar su <b>valor de vida</b> para la empresa. Ventajas: <b>conocer mejor a los clientes</b> (necesidades, satisfacción), <b>aumentar las ventas</b>, aumentar la <b>satisfacción y la lealtad</b> y <b>centralizar toda la información</b> («datos y no suposiciones»). Beneficios: más ventas de los comerciales, gestiones más productivas, mejor comunicación interna y externa, fidelización con atención personalizada, segmentación más fácil y más ingresos gracias a la planificación. Ejemplos: HubSpot, Salesforce, Holded.", k:["Definición del CRM","Marketing relacional: relaciones a largo plazo, lealtad y valor del cliente","Ventajas: conocer clientes, más ventas, lealtad, información centralizada","Un ejemplo de CRM"]},
+  {p:"¿Qué tipos de CRM existen? Explica cada uno.", r:"<b>CRM operativo</b>: gestión de <b>marketing, ventas y servicio al cliente</b>. <b>CRM analítico</b>: <b>almacenamiento de datos</b> para la toma de decisiones sobre productos y servicios y la <b>evaluación de resultados</b>. <b>CRM colaborativo</b>: permite la <b>interacción directa con los clientes</b> (email, teléfono, chat).", k:["Operativo: marketing, ventas y servicio","Analítico: almacén de datos para decidir y evaluar","Colaborativo: interacción directa con el cliente"]},
+  {p:"Explica qué es un ERP, sus ventajas y cómo se clasifica.", r:"El <b>ERP</b> (Enterprise Resource Planning) es un sistema que <b>integra y gestiona toda la información de la empresa</b> (departamentos, recursos y procesos) en una <b>única plataforma</b>, dando control de la información de cada departamento. Ventajas: <b>integrar y optimizar todos los procesos</b>, <b>aumentar la productividad y el control</b>, <b>optimizar el tiempo</b> y evitar duplicidades y errores. Clasificación: según la <b>instalación</b>, <b>en local</b> (en el sistema informático de la empresa) o <b>en la nube</b> (se maneja desde cualquier lugar, sin equipos centralizados); según el <b>diseño</b>, <b>a medida</b> (desde cero para una empresa, más costoso) o <b>predefinido</b> (más económico y rápido, se contrata por módulos según las necesidades). Ejemplos: SAP, Microsoft Dynamics 365, Odoo.", k:["Definición del ERP","Ventajas: integrar procesos, productividad y control, tiempo","En local / en la nube","A medida / predefinido (por módulos)"]},
+  {p:"¿Cuáles son las diferencias entre un CRM y un ERP? ¿Son compatibles?", r:"El <b>CRM</b> se centra en los <b>clientes</b> (relación externa) y busca <b>aumentar las ventas</b> y la fidelización; lo usan <b>ventas, marketing y atención al cliente</b>; gestiona datos de clientes, oportunidades y campañas; su <b>instalación es fácil</b>, es <b>más económico</b> y sirve para <b>empresas de todos los tamaños</b>. El <b>ERP</b> se centra en la <b>gestión interna</b> y busca <b>reducir costes</b> haciendo los procesos más eficientes; lo usan <b>todos los departamentos</b>; gestiona compras, stock, logística, facturación y finanzas; su <b>instalación es más compleja</b>, su <b>coste más elevado</b> y es propio de <b>medianas y grandes empresas</b>. Son sistemas con fines diferentes pero <b>completamente compatibles</b>: lo habitual es integrarlos, y hay que analizar en cada empresa cuál usar o si usar ambos.", k:["CRM: clientes y ventas / ERP: gestión interna y costes","Quién los usa","Instalación y coste","Tamaño de empresa","Son compatibles; analizar cada caso"]},
+  {p:"¿Para qué sirven las TIC en la negociación internacional y por qué algunas empresas no usan TIC especializadas?", r:"Las TIC ayudan a: <b>mejorar la administración</b> de la empresa en su conjunto; <b>facilitar los trámites administrativos</b> (burocracia online); <b>mejorar la comunicación</b> entre trabajadores, clientes y proveedores; y <b>mejorar el rendimiento</b> con el trabajo en red. Limitaciones (por qué no se usan TIC especializadas): ya cuentan con <b>TIC anteriores</b>, <b>no las consideran necesarias</b>, <b>falta de formación</b>, <b>alto coste</b>, no disponer de <b>personal cualificado</b>, <b>dificultad de acceso</b>, <b>preferencia por el cara a cara</b> y <b>falta de infraestructura</b>.", k:["Aplicaciones: administración, trámites, comunicación, trabajo en red","Al menos cuatro limitaciones"]}
+ ],
+ praExist:[0,1],
+ pra:[
+  {p:"<b>Caso.</b> Una cadena de moda quiere recomendar prendas a cada cliente según su historial, recordarle el carrito abandonado, enviarle novedades personalizadas y atender sus consultas por chat. Al mismo tiempo, sus tiendas se quedan sin stock porque compras, almacén y logística no comparten información. ¿Qué sistema resuelve cada problema? Indica qué tipo de CRM usaría para cada función y cómo funcionaría el sistema que propones para el stock.", pasos:["Clientes (recomendaciones, carrito, novedades, consultas): <b>CRM</b>, centrado en la relación con el cliente y en aumentar ventas y fidelización (como hace Zara).","Recomendaciones y campañas personalizadas: <b>CRM operativo</b> (marketing y ventas) apoyado en el <b>analítico</b> (datos de compras para decidir).","Consultas por chat y email: <b>CRM colaborativo</b> (interacción directa).","Stock: <b>ERP</b>, que integra compras, almacén, logística, ventas y finanzas en una plataforma en tiempo real (como Mercadona): la venta descuenta el stock, si baja del mínimo genera el pedido de reposición, logística organiza el envío y finanzas lo registra.","Conclusión: son compatibles; lo ideal es usar ambos e integrarlos."]}
+ ]
+}
+};
+for(const n in PLAN){ const t=d.temas.find(x=>x.n==n); if(!t) continue; const p=PLAN[n];
+  t.examen=p.examen;
+  (p.fueraTest||[]).forEach(i=>{ if(t.test[i]) t.test[i]={...t.test[i], sim:0}; });
+  if(p.test) t.test.push(...p.test);
+  const exist=(p.praExist||[]).map(i=>t.ejercicios?.[i]).filter(Boolean);
+  t.simCortas=p.des; t.simEj=exist.concat(p.pra||[]);
+  if(p.des.length) t.cortas=(t.cortas||[]).concat(p.des);
+  if(p.pra?.length) t.ejercicios=(t.ejercicios||[]).concat(p.pra);
+}
+})();
 ESTUDIO.extra("comercio", {
  1:{cortas:[
   {p:"Explica qué ocurre desde que escribes una dirección web hasta que ves la página.", r:"(1) Escribes el <b>dominio</b> en el navegador. (2) El <b>DNS</b> traduce el nombre al <b>número IP</b> del servidor. (3) El navegador envía una <b>petición con cabeceras</b> (navegador, hora, IP…). (4) El <b>servidor responde</b> y se descarga el <b>código HTML</b>. (5) El navegador lo <b>interpreta y muestra</b> la página. Si es <b>HTTPS</b>, los datos viajan cifrados (candado).", k:["dominio","DNS traduce a IP","petición con cabeceras","servidor responde con HTML","el navegador lo interpreta"]},
@@ -6655,7 +6821,7 @@ ESTUDIO.extra("comercio", {
 (DATA.logistica?.temas||[]).forEach(t=>{ delete t.cortas; });
 /* Inglés: las preguntas cortas se sustituyen por el apartado «Desarrollo»; el simulacro queda en test + ejercicios (+ writing) */
 (DATA.ingles?.temas||[]).forEach(t=>{ delete t.cortas; });
-if(DATA.ingles) DATA.ingles.simulacro={...(DATA.ingles.simulacro||{}), formato:{nt:20, nc:0, ne:2, pt:6, pe:4, mix:true}};
+if(DATA.ingles) DATA.ingles.simulacro={...(DATA.ingles.simulacro||{}), formato:{nt:20, nc:0, ne:2, mix:true}};
 /* ---------- Fin práctica extra ---------- */
 function arrancar(){ estado=leerHash(); render(); }
 ASIGNATURAS.forEach(a=>{ if(!DATA[a.id]) a.listo=false; });
