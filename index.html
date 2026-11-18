@@ -228,6 +228,13 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(-
 .ex .sol{background:var(--surface-2);border-radius:8px;padding:12px;font-size:.94rem}
 .ex .sol ol{margin:6px 0 0;padding-left:20px}
 .ex .sol li{margin:3px 0}
+.ex .clasif{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:14px}
+.ex .clasif li{padding-left:2px}
+.ex .clasif .fr{margin-bottom:6px}
+.ex .clasif select{width:100%;max-width:340px;font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:inherit}
+.ex .clasif .cfb{font-size:.92rem;margin-top:5px}
+.ex .clasif .cfb.ok{color:var(--ok)} .ex .clasif .cfb.bad{color:var(--bad)}
+.ex .clasif .cfb span{color:var(--ink-2,inherit);font-weight:400}
 .ex .foto{border-top:1px dashed var(--line);padding-top:12px;display:flex;flex-direction:column;gap:10px}
 .ex .foto .thumb{max-width:180px;max-height:180px;border-radius:8px;border:1px solid var(--line);object-fit:cover}
 .ex .foto .hint{font-size:.85rem;color:var(--muted)}
@@ -955,14 +962,28 @@ Responde en español, tuteando al alumno, SOLO con un objeto JSON con esta forma
   } finally { btn.disabled=false; }
 }
 
+const CANVAS_BLOQUES=['Segmentos de clientes','Propuesta de valor','Canales','Relación con clientes','Fuentes de ingresos','Recursos clave','Actividades clave','Socios clave','Estructura de costes'];
 function ejercicios(el, sid, n, lista){
   el.innerHTML = `<p class="muted" style="margin-bottom:14px">Escribe el resultado con coma o punto decimal (se acepta un pequeño margen por redondeo), o resuélvelo en papel y corrígelo con una foto.</p><div class="stack">${lista.map((x,k)=>{ const id=`${sid}-t${n}-e${k}`; return `
-    <div class="ex" data-k="${k}"><span class="eyebrow">Ejercicio ${k+1}${x.r==null?' · desarrollo':''}${P.ex[id]?' · resuelto':''}</span><div class="enun">${x.p}</div>
-    <div class="ans">${x.r!=null?`<input id="in-${id}" inputmode="decimal" placeholder="Tu resultado" aria-label="Resultado ejercicio ${k+1}"> <span class="mono muted">${x.u||''}</span><button class="btn primary" data-a="ck">Comprobar</button>`:''}<button class="btn ghost" data-a="sol">Ver solución</button></div>
-    <div class="res" aria-live="polite"></div><div class="sol" hidden>${x.r!=null?`<b>Solución: ${fmtN(x.r,x.dec??2)} ${x.u||''}</b>`:'<b>Solución</b>'}<ol>${x.pasos.map(p=>`<li>${p}</li>`).join('')}</ol></div>
-    <div class="foto"><div class="row"><button class="btn${x.r==null?' primary':''}" data-a="foto" hidden>Corregir con foto</button><input type="file" id="ft-${id}" accept="image/*" capture="environment" hidden></div><span class="hint"></span><div class="corr-out" aria-live="polite"></div></div></div>`; }).join('')}</div>`;
+    <div class="ex" data-k="${k}"><span class="eyebrow">Ejercicio ${k+1}${x.clasif?' · clasificar':x.r==null?' · desarrollo':''}${P.ex[id]?' · resuelto':''}</span><div class="enun">${x.p}</div>
+    ${x.clasif?`<ol class="clasif">${x.clasif.items.map((it,i)=>`<li><div class="fr">${it[0]}</div><select data-i="${i}" aria-label="Bloque de la frase ${i+1}"><option value="">Elige el bloque…</option>${CANVAS_BLOQUES.map((b,j)=>`<option value="${j}">${b}</option>`).join('')}</select><div class="cfb" aria-live="polite"></div></li>`).join('')}</ol>`:''}
+    <div class="ans">${x.clasif?'<button class="btn primary" data-a="ckc">Comprobar</button>':''}${x.r!=null?`<input id="in-${id}" inputmode="decimal" placeholder="Tu resultado" aria-label="Resultado ejercicio ${k+1}"> <span class="mono muted">${x.u||''}</span><button class="btn primary" data-a="ck">Comprobar</button>`:''}<button class="btn ghost" data-a="sol">Ver solución</button></div>
+    <div class="res" aria-live="polite"></div><div class="sol" hidden>${x.r!=null?`<b>Solución: ${fmtN(x.r,x.dec??2)} ${x.u||''}</b>`:'<b>Solución</b>'}<ol>${(x.clasif? x.clasif.items.map(it=>`<b>${CANVAS_BLOQUES[it[1]]}</b>: ${it[2]}`) : x.pasos).map(p=>`<li>${p}</li>`).join('')}</ol></div>
+    ${x.clasif?'':`<div class="foto"><div class="row"><button class="btn${x.r==null?' primary':''}" data-a="foto" hidden>Corregir con foto</button><input type="file" id="ft-${id}" accept="image/*" capture="environment" hidden></div><span class="hint"></span><div class="corr-out" aria-live="polite"></div></div>`}</div>`; }).join('')}</div>`;
   el.querySelectorAll('.ex').forEach(box=>{
     const k=Number(box.dataset.k), x=lista[k], id=`${sid}-t${n}-e${k}`; const inp=box.querySelector('input:not([type=file])'), res=box.querySelector('.res'), sol=box.querySelector('.sol');
+    if(x.clasif){
+      box.querySelector('[data-a=sol]').onclick=()=>{ sol.hidden=!sol.hidden; };
+      box.querySelector('[data-a=ckc]').onclick=()=>{ let ok=0, vac=0;
+        box.querySelectorAll('.clasif li').forEach((li,i)=>{ const it=x.clasif.items[i], v=li.querySelector('select').value, fb=li.querySelector('.cfb');
+          if(v===''){ vac++; fb.className='cfb'; fb.textContent=''; return; }
+          const bien=Number(v)===it[1]; if(bien) ok++;
+          fb.className='cfb '+(bien?'ok':'bad'); fb.innerHTML= (bien?'<b>Correcto.</b> ':`<b>No. Es ${CANVAS_BLOQUES[it[1]]}.</b> `)+`<span>${it[2]}</span>`; });
+        const N=x.clasif.items.length; res.className='res '+(ok===N?'ok':'bad');
+        res.textContent=`${ok} de ${N} correctas`+(vac?` · te faltan ${vac} por clasificar`:'')+'.';
+        if(ok===N){ P.ex[id]=1; save(); } };
+      return;
+    }
     const f=box.querySelector('.foto'), fi=f.querySelector('input[type=file]'); pintarFoto(f);
     f.querySelector('[data-a=foto]').onclick=()=>fi.click();
     fi.onchange=()=>{ const file=fi.files?.[0]; fi.value=''; if(file) corregirFoto(box, x, id, file); };
@@ -1060,7 +1081,7 @@ function vistaExamen(sid){
   if(!poolC.length) temasSim(d).forEach(t=>t.flash.forEach((f,i)=>poolC.push({p:f[0], r:f[1], k:[], tema:t.n, id:`${sid}-t${t.n}-f${i}`})));
   const cortas=F.nc? repartir(poolC, F.nc) : [];
   // Parte 3: 1 o 2 ejercicios prácticos (primero los de cálculo)
-  let poolE=[]; temasSim(d).forEach(t=>(t.simEj||t.ejercicios||[]).forEach((x,k)=>poolE.push({...x, tema:t.n, id:`${sid}-t${t.n}-${t.simEj?'p':'e'}${k}`})));
+  let poolE=[]; temasSim(d).forEach(t=>(t.simEj||t.ejercicios||[]).forEach((x,k)=>{ if(!x.clasif) poolE.push({...x, tema:t.n, id:`${sid}-t${t.n}-${t.simEj?'p':'e'}${k}`}); }));
   let ejs;
   if(!F.nc){ // Sin preguntas de desarrollo propias: los ejercicios de desarrollo valen la parte de desarrollo y los de cálculo la de práctica
     const dE=repartir(poolE.filter(x=>x.r==null), F.nd); let pE=repartir(poolE.filter(x=>x.r!=null), F.ne); if(!pE.length) pE=repartir(poolE.filter(x=>x.r==null && !dE.some(y=>y.id===x.id)), F.ne);
@@ -5219,13 +5240,59 @@ test: [
  {p:"¿Cuál es el primer paso del calendario de contenidos?", o:["Definir objetivos","Programar publicaciones","Medir","Mantenimiento"], c:0, e:"Primero objetivos, luego estrategia, plan, programación, medición, análisis y mantenimiento."},
  {p:"Un plan de acción debe incluir…", o:["KPIs, responsables, plazos, recursos y prioridades","Solo el presupuesto","Solo el logo","Solo los competidores"], c:0, e:"Así se puede ejecutar y controlar."},
  {p:"La herramienta para analizar debilidades, amenazas, fortalezas y oportunidades es…", o:["DAFO","Canvas","SMART","CRM"], c:0, e:"Se usa en el análisis de mercado del plan."},
- {p:"¿Qué porcentaje aproximado de la población mundial usa redes sociales?", o:["60 %","15 %","95 %","35 %"], c:0, e:"Unos 4.620 millones de usuarios."}
+ {p:"¿Qué porcentaje aproximado de la población mundial usa redes sociales?", o:["60 %","15 %","95 %","35 %"], c:0, e:"Unos 4.620 millones de usuarios."},
+ {p:"Gimnasio: «Cuota mensual que pagan los socios». ¿Qué bloque del Canvas es?", o:["Fuentes de ingresos","Segmentos de clientes","Relación con clientes","Estructura de costes"], c:0, e:"Es la forma en que entra el dinero."},
+ {p:"Gimnasio: «Jóvenes de 18 a 30 años que quieren entrenar con horario flexible». ¿Qué bloque es?", o:["Segmentos de clientes","Propuesta de valor","Fuentes de ingresos","Canales"], c:0, e:"Dice quién es el cliente."},
+ {p:"Tienda online de ropa: «Envíos gratis y devoluciones en 30 días sin preguntas». ¿Qué bloque es?", o:["Propuesta de valor","Canales","Actividades clave","Estructura de costes"], c:0, e:"Es el beneficio que recibe el cliente."},
+ {p:"Tienda online de ropa: «La web, Instagram Shopping y un punto de recogida de pedidos». ¿Qué bloque es?", o:["Canales","Relación con clientes","Recursos clave","Socios clave"], c:0, e:"Son los medios por los que el cliente accede y recibe el producto."},
+ {p:"Tienda online de ropa: «Chat de WhatsApp para resolver dudas sobre tallas». ¿Qué bloque es?", o:["Relación con clientes","Canales","Propuesta de valor","Actividades clave"], c:0, e:"Aunque sea un canal digital, su función es atender al cliente."},
+ {p:"Tienda online de ropa: «El almacén, la marca y el stock de prendas». ¿Qué bloque es?", o:["Recursos clave","Actividades clave","Estructura de costes","Socios clave"], c:0, e:"Son activos que la empresa necesita tener."},
+ {p:"Tienda online de ropa: «Diseñar colecciones, gestionar el stock y preparar los envíos». ¿Qué bloque es?", o:["Actividades clave","Recursos clave","Canales","Propuesta de valor"], c:0, e:"Son tareas: qué hace la empresa."},
+ {p:"Tienda online de ropa: «Empresa de mensajería externa que entrega los pedidos». ¿Qué bloque es?", o:["Socios clave","Canales","Recursos clave","Segmentos de clientes"], c:0, e:"Es una empresa externa que colabora."},
+ {p:"Tienda online de ropa: «Alquiler del almacén, sueldos y campañas de publicidad». ¿Qué bloque es?", o:["Estructura de costes","Fuentes de ingresos","Recursos clave","Actividades clave"], c:0, e:"Es dinero que sale."},
+ {p:"«Programa de puntos que premia a los clientes que repiten compra». ¿Qué bloque es?", o:["Relación con clientes","Fuentes de ingresos","Propuesta de valor","Segmentos de clientes"], c:0, e:"Busca fidelizar al cliente."},
+ {p:"«Empresas anunciantes que quieren llegar a una audiencia con la publicidad de la plataforma». ¿Qué bloque es?", o:["Segmentos de clientes","Fuentes de ingresos","Socios clave","Canales"], c:0, e:"Dice quién compra el servicio publicitario. El dinero que pagan sería Ingresos."},
+ {p:"«Algoritmos de recomendación que personalizan el contenido». ¿Qué bloque es?", o:["Recursos clave","Propuesta de valor","Actividades clave","Canales"], c:0, e:"Nombra la tecnología que se usa; el beneficio para el usuario sería la propuesta de valor."},
+ {p:"«Adquirir derechos de emisión de películas». ¿Qué bloque es?", o:["Actividades clave","Recursos clave","Socios clave","Estructura de costes"], c:0, e:"Adquirir es una acción. Los derechos que se tienen serían recursos."},
+ {p:"¿Qué pregunta responde el bloque «Recursos clave»?", o:["¿Qué necesita tener o usar la empresa?","¿Qué hace la empresa?","¿Con quién colabora?","¿En qué gasta?"], c:0, e:"Actividades = qué hace; Socios = con quién; Costes = en qué gasta."},
+ {p:"Para clasificar una frase en el Canvas, lo correcto es…", o:["Fijarse en qué describe principalmente la frase completa","Buscar la primera palabra clave que aparezca","Elegir siempre Propuesta de valor si hay un beneficio","Clasificarla según la empresa del ejemplo"], c:0, e:"Una palabra suelta puede engañar: hay que ver qué elemento describe la frase."},
 ],
 ejercicios: [
  {p:"Redacta un objetivo SMART para una tienda online de zapatillas que quiere entrar en México.", pasos:["Específico: qué (ventas online en México).","Medible: una cifra (p. ej. 500 pedidos o +20 %).","Alcanzable y relevante para el negocio.","Con plazo: «en los próximos 6 meses».","Ejemplo: «Conseguir 500 pedidos online en México antes del 30 de junio»."]},
  {p:"Analiza las 4P para lanzar un masajeador facial en Brasil.", pasos:["Producto: necesidad que cubre, diferencias con la competencia, idioma del manual (portugués).","Precio: competencia local, poder adquisitivo, divisa (real brasileño), impuestos.","Distribución: marketplace o tienda propia, envíos, plazos.","Promoción: redes más usadas, influencers de belleza, anuncios, contenidos en portugués."]},
  {p:"Completa los 9 bloques del Canvas para una academia online de idiomas.", pasos:["Segmentos: estudiantes y profesionales.","Propuesta de valor: clases flexibles con nativos.","Canales: web, app, redes.","Relación: tutor personal, comunidad.","Ingresos: suscripción mensual.","Recursos clave: plataforma y profesores.","Actividades clave: clases, creación de contenidos.","Socios: plataforma de pagos, universidades.","Costes: profesores, tecnología, marketing."]},
- {p:"Diseña un calendario de contenidos de un mes para una pastelería, siguiendo los 7 pasos.", pasos:["Objetivos (p. ej. +500 seguidores).","Estrategia: Instagram y TikTok, tono cercano.","Plan de contenido: recetas, detrás de cámaras, ofertas.","Programación: días y horas de cada publicación.","Medición: Metricool o Hootsuite.","Análisis y ajuste según resultados.","Mantenimiento continuo."]}
+ {p:"Diseña un calendario de contenidos de un mes para una pastelería, siguiendo los 7 pasos.", pasos:["Objetivos (p. ej. +500 seguidores).","Estrategia: Instagram y TikTok, tono cercano.","Plan de contenido: recetas, detrás de cámaras, ofertas.","Programación: días y horas de cada publicación.","Medición: Metricool o Hootsuite.","Análisis y ajuste según resultados.","Mantenimiento continuo."]},
+ {p:"<b>Práctica Canvas · Netflix.</b> Clasifica cada frase en el bloque del Business Model Canvas que describe <b>principalmente</b>.", clasif:{items:[
+   ["«Planes de suscripción, con diferentes modalidades disponibles para los usuarios».",4,"Son la forma de cobrar por el servicio: ¿cómo entra el dinero? No describe la tarea de diseñarlos (eso sería actividad)."],
+   ["«Personas de diferentes países que buscan acceder a películas, series y documentales mediante un servicio de streaming».",0,"Dice quién quiere el servicio."],
+   ["«Página web, aplicación móvil y aplicaciones integradas en televisores, ordenadores y otros dispositivos compatibles».",2,"Son los medios por los que el usuario accede y ve el contenido."],
+   ["«Amplio catálogo de películas, series y documentales bajo demanda, con una experiencia adaptada a los gustos de cada usuario».",1,"Describe el beneficio que recibe el cliente: variedad, bajo demanda y personalización."],
+   ["«Productoras audiovisuales, creadores de contenido y empresas externas que proporcionan servicios tecnológicos».",7,"Nombra agentes externos que colaboran con la empresa."],
+   ["«Producción de series y películas propias, adquisición de derechos, mantenimiento de la plataforma y desarrollo de nuevas funcionalidades».",6,"Enumera acciones: producir, adquirir, mantener, desarrollar."],
+   ["«Servicios de atención online, centro de ayuda y una experiencia digital adaptada a sus necesidades».",3,"Su función es atender y acompañar al cliente."],
+   ["«La tecnología de algoritmos y sistemas de recomendación que se usa para personalizar el contenido».",5,"Nombra la tecnología que se usa, no el beneficio ni la tarea de crearla."],
+   ["«Publicidad incluida en determinados planes y acuerdos comerciales de su plataforma publicitaria».",4,"Es una vía de monetización. No nombra a las empresas colaboradoras."],
+   ["«Los derechos de emisión y las licencias que posee o adquiere para ofrecer películas y series».",5,"Son activos intangibles. Negociarlos sería actividad; quien los concede, socio."],
+   ["«Ingenieros de software, especialistas en datos, profesionales de marketing y equipos de producción».",5,"Son recursos humanos que la empresa necesita."],
+   ["«Servidores y servicios en la nube, producción audiovisual, oficinas, tecnología y funcionamiento general de la plataforma».",8,"Son gastos para mantener el negocio en marcha."],
+   ["«Hogares y usuarios que utilizan Netflix como servicio habitual de entretenimiento mediante una cuenta de suscripción».",0,"El centro de la frase son los hogares y usuarios: quién lo usa."],
+   ["«El centro de ayuda, los canales digitales de asistencia y las herramientas de gestión de la cuenta permiten resolver dudas».",3,"Aunque sean digitales, sirven para ayudar, no para ver el catálogo."],
+   ["«Empresas anunciantes que buscan llegar a audiencias mediante la publicidad ofrecida dentro del servicio».",0,"Dice quién compra el servicio publicitario. Si hablara del dinero obtenido, sería Ingresos."]
+ ]}},
+ {p:"<b>Práctica Canvas · Plataforma de alquiler vacacional</b> (tipo Airbnb). Clasifica cada frase en su bloque.", clasif:{items:[
+   ["«Viajeros que buscan alojamiento en otras ciudades y países, más barato o más auténtico que un hotel».",0,"Dice quién usa el servicio."],
+   ["«Particulares con una vivienda o una habitación libre que quieren alquilarla para ganar dinero».",0,"También son clientes: la plataforma sirve a viajeros y a anfitriones."],
+   ["«Una comisión que la plataforma cobra por cada reserva».",4,"Es la forma en que entra el dinero."],
+   ["«Alojamientos únicos en todo el mundo, con reserva sencilla y pago seguro desde el móvil».",1,"Es el beneficio que recibe el cliente."],
+   ["«La web y la aplicación móvil desde las que se buscan y reservan los alojamientos».",2,"Son los medios de acceso al servicio."],
+   ["«Un servicio de atención 24 horas para resolver incidencias durante la estancia».",3,"Su función es atender al cliente."],
+   ["«Correos y notificaciones con ofertas personalizadas para que el viajero vuelva a reservar».",3,"Busca fidelizar y mantener la relación con el cliente."],
+   ["«La plataforma tecnológica, la marca y la comunidad de anfitriones».",5,"Son activos que la empresa necesita tener."],
+   ["«Desarrolladores, analistas de datos y equipos de atención al cliente».",5,"Son recursos humanos."],
+   ["«Desarrollar y mantener la plataforma, verificar los anuncios y promocionar el servicio».",6,"Son tareas que hace la empresa."],
+   ["«Pasarelas de pago, aseguradoras y fotógrafos externos que colaboran con la plataforma».",7,"Son empresas externas que colaboran."],
+   ["«Servidores, publicidad, atención al cliente y salarios del equipo».",8,"Es dinero que sale para mantener el negocio."]
+ ]}},
 ]
 },
 
