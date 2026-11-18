@@ -573,6 +573,34 @@ button:focus-visible,a:focus-visible,input:focus-visible,tr.go:focus-visible,tex
   *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-property:opacity,color,background-color,border-color !important}
   ::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none !important}
 }
+/* Chat de dudas (Claude) en los tests: panel fijo fuera de #app, así no se borra al pasar de pregunta */
+.dudas{position:fixed;right:16px;bottom:16px;z-index:60;width:min(400px,calc(100vw - 32px));height:min(560px,calc(100dvh - 32px));display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-2);overflow:hidden}
+.dudas[hidden],.dudas form[hidden]{display:none}
+.dudas header>div:last-child{display:flex;align-items:center;flex-shrink:0}
+@media (min-width:900px){body.dudas-open{padding-right:416px}}
+.dudas header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.dudas header b{font-family:var(--f-display);font-size:1.05rem}
+.dudas header small{display:block;color:var(--muted);font-size:.78rem;font-weight:400;font-family:var(--f-body)}
+.dudas .x{border:0;background:none;font-size:1.4rem;line-height:1;padding:4px 8px;color:var(--muted);border-radius:8px}
+.dudas .x:hover{color:var(--ink);background:var(--line)}
+.dudas .ctx{font-size:.8rem;color:var(--muted);padding:8px 14px;border-bottom:1px solid var(--line)}
+.dudas .ctx b{color:var(--ink);font-weight:600}
+.dudas .msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.dudas .m{max-width:88%;padding:9px 12px;border-radius:12px;font-size:.93rem;line-height:1.45;overflow-wrap:anywhere}
+.dudas .m.u{align-self:flex-end;background:var(--acc);color:var(--surface);border-bottom-right-radius:4px}
+.dudas .m.a{align-self:flex-start;background:var(--surface-2);border:1px solid var(--line);border-bottom-left-radius:4px}
+.dudas .m.a.err{color:var(--bad);background:var(--bad-bg);border-color:transparent}
+.dudas .m.a.wait{color:var(--muted)}
+.dudas .sug{display:flex;flex-wrap:wrap;gap:6px}
+.dudas .sug button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 10px;font-size:.82rem}
+.dudas .sug button:hover{border-color:var(--acc)}
+.dudas form{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}
+.dudas textarea{flex:1;resize:none;font:inherit;font-size:.93rem;border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:var(--bg);color:var(--ink);min-height:42px;max-height:120px}
+.dudas textarea:focus{outline:2px solid var(--acc);outline-offset:-1px}
+.dudas form .btn{padding:8px 14px;align-self:flex-end}
+.dudas .nope{padding:16px 14px;font-size:.92rem;line-height:1.5}
+.dudas .nope a{color:var(--acc)}
+@media (max-width:560px){.dudas{right:0;left:0;bottom:0;width:100%;height:62dvh;border-radius:var(--r) var(--r) 0 0;border-bottom:0}}
 </style>
 </head>
 <body>
@@ -685,7 +713,7 @@ function topbar(extra=''){
 }
 
 function render(){
-  clearInterval(timerId);
+  clearInterval(timerId); DUDA=null; pintarCtx();
   const e=estado;
   if(e.sid && !DATA[e.sid] && e.vista!=='inicio'){ return vistaPendiente(e.sid); }
   if(e.vista==='inicio') vistaInicio();
@@ -869,6 +897,7 @@ function quiz(el, preguntas, cfg){
   function pintar(){
     const q=qs[i]; const r=resp[i]; const contestada = r!==null;
     const mostrar = contestada && !examen;
+    DUDA={q, r, mostrar, examen, sid:cfg.sid}; pintarCtx();
     el.innerHTML = `<div class="qcard">
       <div class="qtop"><span class="eyebrow">Pregunta ${i+1} de ${qs.length}${q.tema && cfg.modo!=='tema'?` · Tema ${q.tema}`:''}</span>${q.x?'<span class="tag soft">Punto de examen</span>':''}${restante?`<span class="timer" id="timer">${fmtT(restante)}</span>`:''}</div>
       <div class="qprog"><b style="width:${(i+(contestada?1:0))/qs.length*100}%"></b></div>
@@ -878,18 +907,19 @@ function quiz(el, preguntas, cfg){
         return `<button class="opt ${cls}" data-o="${oi}" ${mostrar?'disabled':''}><span class="l">${'ABCD'[k]}</span><span>${q.o[oi]}</span></button>`; }).join('')}</div>
       ${mostrar? `<div class="expl ${r===q.c?'ok':'bad'}"><b>${r===q.c?'Correcto.':'Incorrecto. La respuesta correcta es la marcada en verde.'}</b>${q.e}</div>`:''}
       <div class="row" style="justify-content:space-between;margin-top:18px">
-        ${examen && i>0? `<button class="btn ghost" id="qPrev">← Anterior</button>`:'<span></span>'}
+        <div class="row">${examen && i>0? `<button class="btn ghost" id="qPrev">← Anterior</button>`:''}<button class="btn ghost" id="qAsk" title="Pregunta una duda sin salir del test">¿Dudas? Pregunta</button></div>
         <div class="row">${examen? `<button class="btn ghost" id="qEnd">Entregar</button>`:''}
         ${(contestada||examen)? `<button class="btn primary" id="qNext" ${examen&&!contestada?'disabled':''}>${i===qs.length-1? (examen?'Entregar y corregir':'Ver resultado') : 'Siguiente →'}</button>`:''}</div>
       </div></div>`;
     el.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{ if(mostrar) return; resp[i]=Number(b.dataset.o); if(!examen) registrar(q, resp[i]); pintar(); });
     const nx=$('#qNext',el); if(nx) nx.onclick=()=>{ if(i<qs.length-1){ i++; pintar(); } else terminar(); };
+    $('#qAsk',el).onclick=abrirDudas;
     const pv=$('#qPrev',el); if(pv) pv.onclick=()=>{ i--; pintar(); };
     const en=$('#qEnd',el); if(en) en.onclick=()=>{ const sin=resp.filter(x=>x===null).length; if(sin && !en.dataset.c){ en.dataset.c=1; en.textContent=`Quedan ${sin} sin contestar · Entregar igualmente`; return; } terminar(); };
   }
   function registrar(q, r){ if(r===q.c) delete P.fallos[q.id]; else P.fallos[q.id]=1; save(); }
   function terminar(){
-    if(fin) return; fin=true; clearInterval(timerId);
+    if(fin) return; fin=true; clearInterval(timerId); DUDA=null; pintarCtx();
     if(examen) qs.forEach((q,k)=>{ if(resp[k]!==null) registrar(q,resp[k]); else P.fallos[q.id]=1; }); save();
     const ok = qs.filter((q,k)=>resp[k]===q.c).length; const pct=Math.round(ok/qs.length*100);
     const nota=(ok/qs.length*10).toFixed(1).replace('.',',');
@@ -912,6 +942,103 @@ function fmtN(x,dec){ return x.toLocaleString('es-ES',{minimumFractionDigits:dec
 /* ---------- Corrección por foto (Claude) ---------- */
 let SAMPLE=null, FOTO_OK=false;
 (async()=>{ try{ if(!window.claude?.use) return; const s=await claude.use('sample'); if(!s) return; const lim=await s.limits().catch(()=>null); SAMPLE=s; FOTO_OK=!!lim?.images; document.querySelectorAll('.foto').forEach(f=>pintarFoto(f)); document.querySelectorAll('[data-a=ia]').forEach(b=>b.hidden=false); document.querySelectorAll('.sin-ia').forEach(b=>b.hidden=true); }catch(e){} })();
+/* ---------- Chat de dudas con Claude (tests) ----------
+   El panel vive fuera de #app: pasar de pregunta o responder no lo cierra ni borra la conversación,
+   y abrirlo no toca el test (mismo estado, mismo cronómetro). */
+const ARTIFACT_URL='https://claude.ai/artifact/XvYwgjc9Eoz8VfH1UwNVnf';
+let DUDA=null;            // pregunta que se ve ahora en pantalla (la pone quiz())
+const CHAT=[];            // [{role, content (lo que se manda), ver (lo que se ve)}]
+let chatCtl=null;
+const GKEY='cleared-gemini-key';
+const gKey=()=>{ try{ return localStorage.getItem(GKEY)||''; }catch(e){ return ''; } };
+const iaOK=()=>!!(SAMPLE || gKey());
+async function geminiChat(inst, hist, {signal, onText}){
+  const contents=hist.map(m=>({role:m.role==='user'?'user':'model', parts:[{text:m.content}]}));
+  const res=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent?alt=sse',{method:'POST', signal, headers:{'Content-Type':'application/json','x-goog-api-key':gKey()}, body:JSON.stringify({system_instruction:{parts:[{text:inst}]}, contents})});
+  if(!res.ok){ let msg=''; try{ msg=(await res.json())?.error?.message||''; }catch(e){} const err=new Error(msg); err.code= res.status===400&&/API key/i.test(msg)||res.status===403? 'bad_key' : res.status===429? 'rate_limited' : 'net'; throw err; }
+  const rd=res.body.getReader(), dec=new TextDecoder(); let buf='', text='';
+  for(;;){ const {done,value}=await rd.read(); if(done) break; buf+=dec.decode(value,{stream:true});
+    let k; while((k=buf.indexOf('\n'))>=0){ const line=buf.slice(0,k).trim(); buf=buf.slice(k+1);
+      if(!line.startsWith('data:')) continue; try{ const j=JSON.parse(line.slice(5)); const d=(j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join(''); if(d){ text+=d; onText?.({text}); } }catch(e){} } }
+  return {text};
+}
+function mdLite(t){ return esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>'); }
+function dudaCtxTexto(){
+  if(!DUDA) return '';
+  const {q,r,mostrar,sid}=DUDA, ops=q.orden.map((oi,k)=>`${'ABCD'[k]}) ${textoPlano(q.o[oi])}`).join('\n');
+  let t=`Asignatura: ${asig(sid)?.nombre||''}${q.tema?` · Tema ${q.tema}`:''}\nPregunta del test que tiene en pantalla:\n${textoPlano(q.p)}\n${ops}`;
+  if(mostrar){ const L=k=>'ABCD'[q.orden.indexOf(k)]; t+=`\nEl alumno ya ha contestado: ${r===q.c?'acertó':'falló'} (marcó ${L(r)}). Correcta: ${L(q.c)}) ${textoPlano(q.o[q.c])}.${q.e?` Explicación de los apuntes: ${textoPlano(q.e)}`:''}`; }
+  else t+= DUDA.examen? `\nEstá haciendo un simulacro de examen y todavía NO la ha contestado: no le digas qué opción es la correcta ni descartes opciones, aunque te lo pida; ayúdale a entender los conceptos para que la razone él.`
+                     : `\nTodavía NO la ha contestado: no le reveles la opción correcta salvo que te la pida expresamente; prioriza ayudarle a razonarla.`;
+  return t;
+}
+function dudasPanel(){
+  let p=$('#dudas'); if(p) return p;
+  p=document.createElement('aside'); p.id='dudas'; p.className='dudas'; p.hidden=true; p.setAttribute('aria-label','Dudas con Claude');
+  p.innerHTML=`<header><div><b>Dudas</b><small>Pregunta sin salir del test. Tu progreso sigue igual.</small></div><div><button class="x" data-a="nuevo" title="Empezar conversación nueva" aria-label="Conversación nueva" style="font-size:.85rem">Nueva</button><button class="x" data-a="clave" title="Cambiar o borrar la clave de Gemini" style="font-size:.85rem" hidden>Clave</button><button class="x" data-a="cerrar" aria-label="Cerrar">×</button></div></header>
+    <div class="ctx"></div><div class="msgs" role="log" aria-live="polite"></div>
+    <form><textarea rows="1" placeholder="Escribe tu duda…" aria-label="Tu duda"></textarea><button class="btn primary" type="submit">Enviar</button></form>`;
+  document.body.appendChild(p);
+  p.querySelector('[data-a=cerrar]').onclick=()=>cerrarDudas();
+  p.querySelector('[data-a=clave]').onclick=()=>{ if(confirmClave()) pintarChat(); };
+  p.querySelector('[data-a=nuevo]').onclick=()=>{ chatCtl?.abort(); CHAT.length=0; pintarChat(); };
+  const ta=p.querySelector('textarea'), f=p.querySelector('form');
+  ta.oninput=()=>{ ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,120)+'px'; };
+  ta.onkeydown=e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); f.requestSubmit(); } };
+  f.onsubmit=e=>{ e.preventDefault(); const t=ta.value.trim(); if(!t || chatCtl) return; ta.value=''; ta.oninput(); preguntarDuda(t); };
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !p.hidden) cerrarDudas(); });
+  return p;
+}
+function pintarCtx(){
+  const p=$('#dudas'); if(!p) return; const c=p.querySelector('.ctx');
+  c.innerHTML = DUDA? `Sobre: <b>${esc(textoPlano(DUDA.q.p).slice(0,110))}${textoPlano(DUDA.q.p).length>110?'…':''}</b>` : 'Pregunta lo que quieras de la asignatura.';
+}
+function pintarChat(){
+  const p=$('#dudas'); if(!p) return; const box=p.querySelector('.msgs');
+  pintarCtx();
+  p.querySelector('[data-a=clave]').hidden = !!SAMPLE || !gKey();
+  if(!iaOK()){ p.querySelector('form').hidden=true; box.innerHTML=`<div class="nope"><b>Para usar el chat en esta web, conecta una IA gratis (Gemini de Google):</b>
+      <ol style="margin:8px 0 10px 18px;padding:0"><li>Entra en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> con tu cuenta de Google.</li><li>Pulsa <b>Create API key</b> y copia la clave.</li><li>Pégala aquí y pulsa Guardar.</li></ol>
+      <div class="row" style="gap:6px"><input type="password" id="gkIn" placeholder="Pega tu clave (AIza…)" autocomplete="off" style="flex:1;min-width:0;font:inherit;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--bg);color:var(--ink)"><button class="btn primary" type="button" id="gkOk" style="padding:8px 14px">Guardar</button></div>
+      <p class="muted" style="font-size:.8rem;margin-top:8px">La clave se guarda solo en este navegador; no se sube a ningún sitio salvo a Google al preguntar. Si abres Cleared desde Claude no hace falta: allí responde Claude.</p></div>`;
+    const gin=box.querySelector('#gkIn'); box.querySelector('#gkOk').onclick=()=>{ const v=gin.value.trim(); if(!v) return; try{ localStorage.setItem(GKEY,v); }catch(e){} pintarChat(); p.querySelector('textarea').focus(); };
+    gin.onkeydown=e=>{ if(e.key==='Enter') box.querySelector('#gkOk').click(); };
+    return; }
+  p.querySelector('form').hidden=false;
+  if(!CHAT.length){
+    const sug = DUDA? (DUDA.mostrar? ['¿Por qué es esa la correcta?','Explícamelo con un ejemplo','¿Por qué no vale mi respuesta?'] : ['Explícame los conceptos de esta pregunta','Dame una pista sin decirme la respuesta']) : ['Explícame la diferencia entre dos conceptos'];
+    box.innerHTML=`<div class="m a">Hola. Pregúntame cualquier duda sobre la pregunta que tienes delante o sobre el tema. Respondo rápido y sin que pierdas el test.</div><div class="sug">${sug.map(s=>`<button type="button">${esc(s)}</button>`).join('')}</div>`;
+    box.querySelectorAll('.sug button').forEach(b=>b.onclick=()=>preguntarDuda(b.textContent));
+    return;
+  }
+  box.innerHTML=CHAT.map(m=>`<div class="m ${m.role==='user'?'u':'a'}${m.err?' err':''}${m.wait?' wait':''}">${m.role==='user'?esc(m.ver):mdLite(m.ver)}</div>`).join('');
+  box.scrollTop=box.scrollHeight;
+}
+function confirmClave(){ try{ localStorage.removeItem(GKEY); }catch(e){} CHAT.length=0; return true; }
+function cerrarDudas(){ const p=$('#dudas'); if(p) p.hidden=true; document.body.classList.remove('dudas-open'); }
+function abrirDudas(){ const p=dudasPanel(); p.hidden=false; document.body.classList.add('dudas-open'); pintarChat(); if(iaOK()) setTimeout(()=>p.querySelector('textarea').focus(),30); }
+async function preguntarDuda(texto){
+  if(!iaOK() || chatCtl) return;
+  const ctx=dudaCtxTexto();
+  CHAT.push({role:'user', ver:texto, content: ctx? `[Contexto: ${ctx}]\n\nDuda del alumno: ${texto}` : texto});
+  const resp={role:'assistant', ver:'Pensando…', wait:true}; CHAT.push(resp); pintarChat();
+  const inst=`Eres un profesor de FP de Comercio Internacional que resuelve dudas de un alumno mientras hace un test de repaso en la app Cleared. Responde en español, claro y breve (normalmente 2-6 frases, como mucho una lista corta), con un ejemplo cuando ayude. Usa **negritas** solo para términos clave. Sin títulos ni tablas. Si te pasa el contexto de una pregunta, cíñete a ella y respeta lo que diga sobre no revelar la respuesta.\n\n`;
+  const hist=CHAT.filter(m=>m!==resp && !m.err).slice(-12).map(m=>({role:m.role, content:m.content||m.ver}));
+  while(hist.length && hist[0].role!=='user') hist.shift();
+  chatCtl=new AbortController();
+  const onText=({text})=>{ if(text){ resp.ver=text; resp.wait=false; pintarChat(); } };
+  try{
+    const r = SAMPLE? await SAMPLE([{...hist[0], content: inst+hist[0].content}, ...hist.slice(1)], {signal:chatCtl.signal, cache:false, modelTier:'quick', onText})
+                    : await geminiChat(inst.trim(), hist, {signal:chatCtl.signal, onText});
+    if(r.text){ resp.ver=r.text; resp.content=r.text; } else { resp.ver='No ha llegado respuesta. Vuelve a intentarlo.'; resp.err=true; } resp.wait=false;
+  }catch(e){
+    if(e?.text){ resp.ver=e.text; resp.content=e.text; resp.wait=false; }
+    else if(e?.code==='bad_key'){ resp.ver='Google no acepta esa clave. Pulsa «Clave» arriba para borrarla y pega otra.'; resp.err=true; resp.wait=false; }
+    else if(!SAMPLE && e?.code!=='rate_limited' && e?.name!=='AbortError'){ resp.ver='No se ha podido conectar con Gemini. Comprueba tu conexión y vuelve a intentarlo.'+(e?.message?` (${e.message.slice(0,140)})`:''); resp.err=true; resp.wait=false; }
+    else { resp.ver = e?.name==='AbortError'||e?.code==='cancelled'? 'Cancelado.' : errMsg(e).replace('Corrección','Respuesta').replace('correcciones','preguntas').replace(' o corregirte tú con la respuesta modelo',''); resp.err=true; resp.wait=false; }
+  }
+  chatCtl=null; pintarChat();
+}
 function errMsg(e){ return {cancelled:'Corrección cancelada.', not_granted:'No has permitido que la app use Claude. Puedes activarlo en los permisos de la app o corregirte tú con la respuesta modelo.', rate_limited:'Has hecho muchas correcciones seguidas. Espera un poco y vuelve a intentarlo.', image_rejected:'No se ha podido usar esa imagen. Prueba con otra foto (JPG o PNG).', invalid_json:'La corrección no ha salido bien. Vuelve a intentarlo.', refused:'No se ha podido corregir. Vuelve a intentarlo.'}[e?.code] || 'Ha fallado la conexión. Vuelve a intentarlo.'; }
 const textoPlano = h => { const d=document.createElement('div'); d.innerHTML=h; return d.textContent; };
 function pintarFoto(f){
