@@ -952,15 +952,31 @@ let chatCtl=null;
 const GKEY='cleared-gemini-key';
 const gKey=()=>{ try{ return localStorage.getItem(GKEY)||''; }catch(e){ return ''; } };
 const iaOK=()=>!!(SAMPLE || gKey());
-async function geminiChat(inst, hist, {signal, onText}){
-  const contents=hist.map(m=>({role:m.role==='user'?'user':'model', parts:[{text:m.content}]}));
-  const res=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent?alt=sse',{method:'POST', signal, headers:{'Content-Type':'application/json','x-goog-api-key':gKey()}, body:JSON.stringify({system_instruction:{parts:[{text:inst}]}, contents})});
-  if(!res.ok){ let msg=''; try{ msg=(await res.json())?.error?.message||''; }catch(e){} const err=new Error(msg); err.code= res.status===400&&/API key/i.test(msg)||res.status===403? 'bad_key' : res.status===429? 'rate_limited' : 'net'; throw err; }
+const GEMINI_MODELOS=['gemini-flash-latest','gemini-flash-lite-latest','gemini-2.5-flash-lite','gemini-2.5-flash'];
+async function geminiUna(modelo, inst, contents, {signal, onText}){
+  const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:streamGenerateContent?alt=sse`,{method:'POST', signal, headers:{'Content-Type':'application/json','x-goog-api-key':gKey()}, body:JSON.stringify({system_instruction:{parts:[{text:inst}]}, contents})});
+  if(!res.ok){ let msg=''; try{ msg=(await res.json())?.error?.message||''; }catch(e){} const err=new Error(msg); err.status=res.status;
+    err.code= (res.status===400&&/API key/i.test(msg))||res.status===401||res.status===403? 'bad_key' : res.status===429&&/quota|limit/i.test(msg)&&!/demand/i.test(msg)? 'cuota' : res.status===404||res.status===429||res.status>=500? 'saturado' : 'net'; throw err; }
   const rd=res.body.getReader(), dec=new TextDecoder(); let buf='', text='';
   for(;;){ const {done,value}=await rd.read(); if(done) break; buf+=dec.decode(value,{stream:true});
     let k; while((k=buf.indexOf('\n'))>=0){ const line=buf.slice(0,k).trim(); buf=buf.slice(k+1);
       if(!line.startsWith('data:')) continue; try{ const j=JSON.parse(line.slice(5)); const d=(j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join(''); if(d){ text+=d; onText?.({text}); } }catch(e){} } }
+  if(!text){ const err=new Error('sin texto'); err.code='saturado'; throw err; }
   return {text};
+}
+// Si un modelo está saturado ("high demand"), prueba el siguiente; si todos fallan, espera y da otra vuelta.
+async function geminiChat(inst, hist, {signal, onText, onEstado}){
+  const contents=hist.map(m=>({role:m.role==='user'?'user':'model', parts:[{text:m.content}]}));
+  let ultimo;
+  for(let vuelta=0; vuelta<3; vuelta++){
+    if(vuelta){ onEstado?.(`Gemini está saturado. Reintentando en unos segundos… (${vuelta+1}/3)`); await new Promise((ok,ko)=>{ const t=setTimeout(ok,vuelta*3000); signal?.addEventListener('abort',()=>{ clearTimeout(t); ko(new DOMException('','AbortError')); },{once:true}); }); }
+    for(const [k,m] of GEMINI_MODELOS.entries()){
+      if(k && !vuelta) onEstado?.('Gemini está saturado. Probando con otro modelo…');
+      try{ return await geminiUna(m, inst, contents, {signal, onText}); }
+      catch(e){ ultimo=e; if(e?.name==='AbortError' || e?.code!=='saturado') throw e; }
+    }
+  }
+  throw ultimo;
 }
 function mdLite(t){ return esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>'); }
 function dudaCtxTexto(){
@@ -1029,11 +1045,13 @@ async function preguntarDuda(texto){
   const onText=({text})=>{ if(text){ resp.ver=text; resp.wait=false; pintarChat(); } };
   try{
     const r = SAMPLE? await SAMPLE([{...hist[0], content: inst+hist[0].content}, ...hist.slice(1)], {signal:chatCtl.signal, cache:false, modelTier:'quick', onText})
-                    : await geminiChat(inst.trim(), hist, {signal:chatCtl.signal, onText});
+                    : await geminiChat(inst.trim(), hist, {signal:chatCtl.signal, onText, onEstado:t=>{ if(resp.wait){ resp.ver=t; pintarChat(); } }});
     if(r.text){ resp.ver=r.text; resp.content=r.text; } else { resp.ver='No ha llegado respuesta. Vuelve a intentarlo.'; resp.err=true; } resp.wait=false;
   }catch(e){
     if(e?.text){ resp.ver=e.text; resp.content=e.text; resp.wait=false; }
     else if(e?.code==='bad_key'){ resp.ver='Google no acepta esa clave. Pulsa «Clave» arriba para borrarla y pega otra.'; resp.err=true; resp.wait=false; }
+    else if(!SAMPLE && e?.code==='saturado'){ resp.ver='Los servidores de Gemini están saturados ahora mismo (le pasa a todo el mundo, no es tu clave). Espera un minuto y vuelve a preguntar.'; resp.err=true; resp.wait=false; }
+    else if(!SAMPLE && e?.code==='cuota'){ resp.ver='Has llegado al límite gratuito de Gemini por ahora. Espera un rato (o hasta mañana) y vuelve a preguntar.'; resp.err=true; resp.wait=false; }
     else if(!SAMPLE && e?.code!=='rate_limited' && e?.name!=='AbortError'){ resp.ver='No se ha podido conectar con Gemini. Comprueba tu conexión y vuelve a intentarlo.'+(e?.message?` (${e.message.slice(0,140)})`:''); resp.err=true; resp.wait=false; }
     else { resp.ver = e?.name==='AbortError'||e?.code==='cancelled'? 'Cancelado.' : errMsg(e).replace('Corrección','Respuesta').replace('correcciones','preguntas').replace(' o corregirte tú con la respuesta modelo',''); resp.err=true; resp.wait=false; }
   }
