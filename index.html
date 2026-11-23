@@ -763,13 +763,13 @@ function vistaInicio(){
     <p>Esquemas de cada tema, tarjetas, tests con corrección automática y chat de dudas, preguntas cortas, prácticas y simulacros de examen. Todo sale de tus apuntes.</p></div>
     ${p? `<div class="countdown"><div class="eyebrow">Próximo: ${esc(p.nombre)}</div><div class="big">${d===0? flap('HOY','xl') : flap(String(d),'xl')+`<span class="u">${d===1?'día':'días'}</span>`}</div><div class="muted mono">${fmtFecha(p.examen)}</div></div>`:''}
   </section>
-  <section class="board" aria-label="Segundo trimestre">
-    <div class="board-head"><h2>Segundo trimestre</h2><span>Exámenes hasta el tema 14</span></div>
-    <table><thead><tr><th>Cód.</th><th>Asignatura</th><th>Entran</th><th>Fecha</th><th>Estado</th></tr></thead><tbody>${filas(2)}</tbody></table>
-  </section>
-  <section class="board" aria-label="Primer trimestre" style="margin-top:22px">
+  <section class="board" aria-label="Primer trimestre">
     <div class="board-head"><h2>Primer trimestre</h2><span>Noviembre 2026</span></div>
     <table><thead><tr><th>Cód.</th><th>Asignatura</th><th>Fecha</th><th>Faltan</th><th>Estado</th></tr></thead><tbody>${filas(1)}</tbody></table>
+  </section>
+  <section class="board" aria-label="Segundo trimestre" style="margin-top:22px">
+    <div class="board-head"><h2>Segundo trimestre</h2><span>Exámenes hasta el tema 14</span></div>
+    <table><thead><tr><th>Cód.</th><th>Asignatura</th><th>Entran</th><th>Fecha</th><th>Estado</th></tr></thead><tbody>${filas(2)}</tbody></table>
   </section>
   ${pie()}`;
   if(!flapHecho && !reduceMotion()){ app.classList.add('intro'); setTimeout(()=>app.classList.remove('intro'), 1400); }
