@@ -46,11 +46,11 @@
   color-scheme:dark;
 }
 /* Colores por asignatura: --al (día) y --ad (noche / tablero) */
-.s-financiacion,.s-financiacion2{--al:#2E4BD6;--ad:#93A6FF}
+.s-financiacion,.s-financiacion2,.s-financiacion3{--al:#2E4BD6;--ad:#93A6FF}
 .s-logistica,.s-logistica2{--al:#BB4A06;--ad:#FF9D5C}
 .s-ingles,.s-ingles2{--al:#AD2768;--ad:#F58FC1}
 .s-sistemas,.s-sistemas2{--al:#0C7A69;--ad:#5CD8C2}
-.s-gestion,.s-gestion2{--al:#6A41C6;--ad:#BBA4FF}
+.s-gestion,.s-gestion2,.s-gestion3{--al:#6A41C6;--ad:#BBA4FF}
 .s-negociacion,.s-negociacion2{--al:#577309;--ad:#BEDA5E}
 .s-comercio,.s-comercio2{--al:#946200;--ad:#F4C24F}
 :root,.wrap,.wrap [class*="s-"]{--acc:var(--al,#2E4BD6);--acc-soft:color-mix(in oklab, var(--acc) 11%, var(--surface));--acc-line:color-mix(in oklab, var(--acc) 38%, var(--line))}
@@ -623,15 +623,23 @@ const ASIGNATURAS = [
    visible para estudiar (marcado «No entra»), pero deja de salir en el simulacro. Para volver a meterlo, añádelo.
    «examen»: fecha 'AAAA-MM-DD', o null mientras no se sepa. */
 const SEGUNDO = [
-  {id:'financiacion2', cod:'FIN', nombre:'Financiación Internacional',          examen:null, entran:[8,9,10,11,12,13,14]},
+  {id:'financiacion2', cod:'FIN', nombre:'Financiación Internacional',          examen:null, entran:[8,9,10,11,12]},
   {id:'logistica2',    cod:'LOG', nombre:'Logística de Almacenamiento',         examen:null, entran:[9,10,11,12,13,14]},
   {id:'ingles2',       cod:'ENG', nombre:'Inglés',                              examen:null, entran:[8,9,10,11,12,13,14]},
   {id:'sistemas2',     cod:'SIM', nombre:'Sistemas de Información de Mercados', examen:null, entran:[8,9,10,11,12,13,14]},
-  {id:'gestion2',      cod:'GEF', nombre:'Gestión Económica y Financiera',      examen:null, entran:[8,9,10,11,12,13,14]},
+  {id:'gestion2',      cod:'GEF', nombre:'Gestión Económica y Financiera',      examen:null, entran:[8,10,11,12,13]},
   {id:'negociacion2',  cod:'NEG', nombre:'Negociación Internacional',           examen:null, entran:[6,7,8,9,10,11,12], desdeT1:[6,7]},
   {id:'comercio2',     cod:'CDI', nombre:'Comercio Digital Internacional',      examen:null, entran:[8,9,10,11,12,13,14]},
 ];
+/* ---------- TERCER TRIMESTRE ----------
+   Temas del 2.º trimestre que no entran en su examen y pasan al 3.º. «desde»: la asignatura del 2.º de la que salen;
+   «temas»: los que pasan (salen del 2.º con todo su contenido y entran en el simulacro del 3.º). */
+const TERCERO = [
+  {id:'financiacion3', cod:'FIN', nombre:'Financiación Internacional',     examen:null, desde:'financiacion2', temas:[13,14]},
+  {id:'gestion3',      cod:'GEF', nombre:'Gestión Económica y Financiera', examen:null, desde:'gestion2',      temas:[14]},
+];
 ASIGNATURAS.forEach(a=>a.tri=1); SEGUNDO.forEach(a=>{ a.tri=2; a.listo=true; ASIGNATURAS.push(a); });
+TERCERO.forEach(a=>{ a.tri=3; a.listo=true; a.entran=a.temas; ASIGNATURAS.push(a); });
 const DATA = {};
 window.ESTUDIO = {
   registrar(d){ DATA[d.id] = d; },
@@ -708,7 +716,7 @@ function ir(h){ if(location.hash==='#'+h || (!h && !location.hash)) render(); el
 function leerHash(){
   const h = location.hash.replace('#','');
   if(!h) return {vista:'inicio'};
-  const m = h.match(/^([a-z]+2?)(?:-(t\d+|simulacro|fallos|repaso|writing|glossary|tipotest|desarrollo))?$/);
+  const m = h.match(/^([a-z]+[23]?)(?:-(t\d+|simulacro|fallos|repaso|writing|glossary|tipotest|desarrollo))?$/);
   if(!m || !asig(m[1])) return {vista:'inicio'};
   if(!m[2]) return {vista:'asig', sid:m[1]};
   if(/^t\d+$/.test(m[2])) return {vista:'tema', sid:m[1], tema:Number(m[2].slice(1))};
@@ -752,7 +760,7 @@ function vistaInicio(){
     return `<tr class="go s-${a.id}" style="--r:${r}" tabindex="0" onclick="ir('${a.id}')" onkeydown="if(event.key==='Enter')ir('${a.id}')">
       <td>${flap(a.cod)}</td>
       <td class="sub"><span class="dot"></span>${esc(a.nombre)}</td>
-      <td class="mono">${a.tri===2? 'Temas '+temasEntran(a) : fmtFecha(a.examen)}</td>
+      <td class="mono">${a.tri>1? ((a.entran||[]).length===1?'Tema ':'Temas ')+temasEntran(a) : fmtFecha(a.examen)}</td>
       <td class="mono">${d>0? d+' d' : d===0? '—' : a.examen? '' : fmtFecha(null)}</td>
       <td>${chip}</td></tr>`;
   }).join('');
@@ -771,6 +779,10 @@ function vistaInicio(){
     <div class="board-head"><h2>Segundo trimestre</h2><span>Exámenes hasta el tema 14</span></div>
     <table><thead><tr><th>Cód.</th><th>Asignatura</th><th>Entran</th><th>Fecha</th><th>Estado</th></tr></thead><tbody>${filas(2)}</tbody></table>
   </section>
+  ${ASIGNATURAS.some(a=>a.tri===3)? `<section class="board" aria-label="Tercer trimestre" style="margin-top:22px">
+    <div class="board-head"><h2>Tercer trimestre</h2><span>Temas que no entran en el 2.º</span></div>
+    <table><thead><tr><th>Cód.</th><th>Asignatura</th><th>Entran</th><th>Fecha</th><th>Estado</th></tr></thead><tbody>${filas(3)}</tbody></table>
+  </section>`:''}
   ${pie()}`;
   if(!flapHecho && !reduceMotion()){ app.classList.add('intro'); setTimeout(()=>app.classList.remove('intro'), 1400); }
   flapShuffle(app);
@@ -791,11 +803,11 @@ function vistaAsig(sid){
   const cards = d.temas.map(t=>{
     const p=progresoTema(sid,t);
     return `<button class="tcard" onclick="ir('${sid}-t${t.n}')">
-      <span class="row" style="justify-content:space-between;gap:8px"><span class="num">TEMA ${t.n}</span>${a.tri===2&&fueraSim(d,t.n)?'<span class="tag soft">No entra</span>':t.examen?.length?'<span class="tag">Entra en examen</span>':''}</span><h3>${esc(t.titulo)}</h3><p>${esc(t.idea)}</p></button>`;
+      <span class="row" style="justify-content:space-between;gap:8px"><span class="num">TEMA ${t.n}</span>${a.tri>1&&fueraSim(d,t.n)?'<span class="tag soft">No entra</span>':t.examen?.length?'<span class="tag">Entra en examen</span>':''}</span><h3>${esc(t.titulo)}</h3><p>${esc(t.idea)}</p></button>`;
   }).join('');
   const sim=P.tests[`${sid}-sim`]; const conEx=d.temas.filter(t=>t.examen?.length);
   app.innerHTML = topbar(`<button onclick="ir('')">Inicio</button><span>/</span><span>${esc(a.nombre)}</span>`) + `
-  <div class="subj-head"><div><span class="eyebrow">${a.tri===2?'2º trimestre · ':''}${a.cod} · ${d.temas.length} temas · ${nq} preguntas${a.tri===2?' · entran '+temasEntran(a):''}</span><h1>${esc(a.nombre)}</h1></div>
+  <div class="subj-head"><div><span class="eyebrow">${a.tri>1?a.tri+'º trimestre · ':''}${a.cod} · ${d.temas.length} temas · ${nq} preguntas${a.tri>1?' · entran '+temasEntran(a):''}</span><h1>${esc(a.nombre)}</h1></div>
     <div class="countdown"><div class="eyebrow">${a.examen? 'Examen '+fmtFecha(a.examen) : 'Fecha del examen'}</div><div class="big" style="font-size:2.4rem">${dias==null? 'Por fijar' : dias>0? dias+' días' : dias===0? 'Hoy':'Hecho'}</div></div></div>
   <div class="actions">
     <button class="btn primary" onclick="ir('${sid}-simulacro')">Simulacro tipo examen <span class="n">${DATA[sid]?.simulacro?.formato?.nc===0?'test + desarrollo y práctica':'test + desarrollo + práctica'}</span></button>
@@ -816,8 +828,8 @@ function vistaTema(sid,n){
   if(!tabs.find(x=>x[0]===tabActual)) tabActual='esquema';
   const prev=d.temas.find(x=>x.n===n-1), next=d.temas.find(x=>x.n===n+1);
   app.innerHTML = topbar(`<button onclick="ir('')">Inicio</button><span>/</span><button onclick="ir('${sid}')">${esc(a.nombre)}</button><span>/</span><span>Tema ${n}</span>`) + `
-  <span class="eyebrow">${a.tri===2?'2º trimestre · ':''}${a.cod} · Tema ${n}</span><h1 style="margin-top:6px">${esc(t.titulo)}</h1>
-  ${a.tri===2&&fueraSim(d,n)?'<section class="exban" style="margin:16px 0 0"><b>Este tema no entra en el examen del trimestre</b> y no sale en el simulacro. Puedes seguir estudiándolo.</section>':''}
+  <span class="eyebrow">${a.tri>1?a.tri+'º trimestre · ':''}${a.cod} · Tema ${n}</span><h1 style="margin-top:6px">${esc(t.titulo)}</h1>
+  ${a.tri>1&&fueraSim(d,n)?'<section class="exban" style="margin:16px 0 0"><b>Este tema no entra en el examen del trimestre</b> y no sale en el simulacro. Puedes seguir estudiándolo.</section>':''}
   ${t.examen?.length?`<section class="exban" style="margin:16px 0 0"><b>Entra en el examen</b><ul>${t.examen.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></section>`:''}
   <div class="tabs" role="tablist">${tabs.map(([k,l])=>`<button class="tab" role="tab" aria-selected="${k===tabActual}" onclick="vt(()=>{tabActual='${k}';vistaTema('${sid}',${n})})">${l}${k==='ejer'?` <span class="mono muted">${t.ejercicios.length}</span>`:k==='cortas'?` <span class="mono muted">${t.cortas.length}</span>`:''}</button>`).join('')}</div>
   <div id="panel"></div>
@@ -11610,6 +11622,9 @@ ejercicios: [
 SEGUNDO.forEach(a=>{ const d=DATA[a.id], d1=DATA[a.id.replace(/2$/,'')]; if(!d||!d1||!a.desdeT1) return;
   const mover=d1.temas.filter(t=>a.desdeT1.includes(t.n)); d1.temas=d1.temas.filter(t=>!a.desdeT1.includes(t.n));
   d.temas=mover.concat(d.temas.filter(t=>!a.desdeT1.includes(t.n))).sort((x,y)=>x.n-y.n); });
+TERCERO.forEach(a=>{ const d2=DATA[a.desde]; if(!d2) return;
+  const mover=d2.temas.filter(t=>a.temas.includes(t.n)); d2.temas=d2.temas.filter(t=>!a.temas.includes(t.n));
+  DATA[a.id]={...d2, id:a.id, temas:mover, simulacro:{...(d2.simulacro||{}), fuera:[]}}; });
 SEGUNDO.forEach(a=>{ const d=DATA[a.id]; if(!d) return; d.simulacro={...(d.simulacro||{}), fuera:d.temas.map(t=>t.n).filter(n=>!a.entran.includes(n))}; });
 function arrancar(){ estado=leerHash(); render(); }
 ASIGNATURAS.forEach(a=>{ if(!DATA[a.id]) a.listo=false; });
