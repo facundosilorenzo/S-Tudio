@@ -628,7 +628,7 @@ const SEGUNDO = [
   {id:'ingles2',       cod:'ENG', nombre:'Inglés',                              examen:null, entran:[8,9,10,11,12,13,14]},
   {id:'sistemas2',     cod:'SIM', nombre:'Sistemas de Información de Mercados', examen:null, entran:[8,9,10,11,12,13,14]},
   {id:'gestion2',      cod:'GEF', nombre:'Gestión Económica y Financiera',      examen:null, entran:[8,9,10,11,12,13,14]},
-  {id:'negociacion2',  cod:'NEG', nombre:'Negociación Internacional',           examen:null, entran:[8,9,10,11,12]},
+  {id:'negociacion2',  cod:'NEG', nombre:'Negociación Internacional',           examen:null, entran:[6,7,8,9,10,11,12], desdeT1:[6,7]},
   {id:'comercio2',     cod:'CDI', nombre:'Comercio Digital Internacional',      examen:null, entran:[8,9,10,11,12,13,14]},
 ];
 ASIGNATURAS.forEach(a=>a.tri=1); SEGUNDO.forEach(a=>{ a.tri=2; a.listo=true; ASIGNATURAS.push(a); });
@@ -11606,6 +11606,10 @@ ejercicios: [
 });
 /* ===== FIN SEGUNDO TRIMESTRE ===== */
 /* Segundo trimestre: los temas que no están en «entran» quedan fuera del simulacro */
+/* «desdeT1»: temas del primer trimestre que pasan al segundo (salen del 1.º y se suman al 2.º, con todo su contenido) */
+SEGUNDO.forEach(a=>{ const d=DATA[a.id], d1=DATA[a.id.replace(/2$/,'')]; if(!d||!d1||!a.desdeT1) return;
+  const mover=d1.temas.filter(t=>a.desdeT1.includes(t.n)); d1.temas=d1.temas.filter(t=>!a.desdeT1.includes(t.n));
+  d.temas=mover.concat(d.temas.filter(t=>!a.desdeT1.includes(t.n))).sort((x,y)=>x.n-y.n); });
 SEGUNDO.forEach(a=>{ const d=DATA[a.id]; if(!d) return; d.simulacro={...(d.simulacro||{}), fuera:d.temas.map(t=>t.n).filter(n=>!a.entran.includes(n))}; });
 function arrancar(){ estado=leerHash(); render(); }
 ASIGNATURAS.forEach(a=>{ if(!DATA[a.id]) a.listo=false; });
