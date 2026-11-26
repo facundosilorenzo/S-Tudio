@@ -52,7 +52,7 @@
 .s-sistemas,.s-sistemas2{--al:#0C7A69;--ad:#5CD8C2}
 .s-gestion,.s-gestion2,.s-gestion3{--al:#6A41C6;--ad:#BBA4FF}
 .s-negociacion,.s-negociacion2{--al:#577309;--ad:#BEDA5E}
-.s-comercio,.s-comercio2{--al:#946200;--ad:#F4C24F}
+.s-comercio,.s-comercio2,.s-comercio3{--al:#946200;--ad:#F4C24F}
 :root,.wrap,.wrap [class*="s-"]{--acc:var(--al,#2E4BD6);--acc-soft:color-mix(in oklab, var(--acc) 11%, var(--surface));--acc-line:color-mix(in oklab, var(--acc) 38%, var(--line))}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]),:root:not([data-theme="light"]) .wrap,:root:not([data-theme="light"]) .wrap [class*="s-"]{--acc:var(--ad,#93A6FF)}}
 :root[data-theme="dark"],:root[data-theme="dark"] .wrap,:root[data-theme="dark"] .wrap [class*="s-"]{--acc:var(--ad,#93A6FF)}
@@ -629,7 +629,7 @@ const SEGUNDO = [
   {id:'sistemas2',     cod:'SIM', nombre:'Sistemas de Información de Mercados', examen:null, entran:[8,9,10,11,12,13,14]},
   {id:'gestion2',      cod:'GEF', nombre:'Gestión Económica y Financiera',      examen:null, entran:[8,10,11,12,13]},
   {id:'negociacion2',  cod:'NEG', nombre:'Negociación Internacional',           examen:null, entran:[6,7,8,9,10,11,12], desdeT1:[6,7]},
-  {id:'comercio2',     cod:'CDI', nombre:'Comercio Digital Internacional',      examen:null, entran:[8,9,10,11,12,13,14]},
+  {id:'comercio2',     cod:'CDI', nombre:'Comercio Digital Internacional',      examen:null, entran:[7,8,9,10], desdeT1:[7]},
 ];
 /* ---------- TERCER TRIMESTRE ----------
    Temas del 2.º trimestre que no entran en su examen y pasan al 3.º. «desde»: la asignatura del 2.º de la que salen;
@@ -637,6 +637,7 @@ const SEGUNDO = [
 const TERCERO = [
   {id:'financiacion3', cod:'FIN', nombre:'Financiación Internacional',     examen:null, desde:'financiacion2', temas:[13,14]},
   {id:'gestion3',      cod:'GEF', nombre:'Gestión Económica y Financiera', examen:null, desde:'gestion2',      temas:[14]},
+  {id:'comercio3',     cod:'CDI', nombre:'Comercio Digital Internacional', examen:null, desde:'comercio2',     temas:[11,12,13,14]},
 ];
 ASIGNATURAS.forEach(a=>a.tri=1); SEGUNDO.forEach(a=>{ a.tri=2; a.listo=true; ASIGNATURAS.push(a); });
 TERCERO.forEach(a=>{ a.tri=3; a.listo=true; a.entran=a.temas; ASIGNATURAS.push(a); });
