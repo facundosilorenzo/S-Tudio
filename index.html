@@ -811,7 +811,7 @@ function vistaAsig(sid){
   <div class="subj-head"><div><span class="eyebrow">${a.tri>1?a.tri+'º trimestre · ':''}${a.cod} · ${d.temas.length} temas · ${nq} preguntas${a.tri>1?' · entran '+temasEntran(a):''}</span><h1>${esc(a.nombre)}</h1></div>
     <div class="countdown"><div class="eyebrow">${a.examen? 'Examen '+fmtFecha(a.examen) : 'Fecha del examen'}</div><div class="big" style="font-size:2.4rem">${dias==null? 'Por fijar' : dias>0? dias+' días' : dias===0? 'Hoy':'Hecho'}</div></div></div>
   <div class="actions">
-    <button class="btn primary" onclick="ir('${sid}-simulacro')">Simulacro tipo examen <span class="n">${DATA[sid]?.simulacro?.formato?.nc===0?'test + desarrollo y práctica':'test + desarrollo + práctica'}</span></button>
+    <button class="btn primary" onclick="ir('${sid}-simulacro')">Simulacro tipo examen <span class="n">20 test + 3 desarrollo + 2 prácticos</span></button>
     ${sid==='ingles'?`<button class="btn" onclick="ir('ingles-writing')">Writing <span class="n">corrige Claude</span></button>`:''}
     <button class="btn" onclick="ir('${sid}-fallos')" ${nf?'':'disabled'}>Repasar mis fallos <span class="n">${nf}</span></button>
     <button class="btn" onclick="ir('${sid}-repaso')">Todas las tarjetas</button>
@@ -1247,8 +1247,11 @@ const nPal = s => (String(s).trim().match(/[A-Za-zÀ-ÿ0-9'’-]+/g)||[]).length
 function vistaExamen(sid){
   const a=asig(sid), d=DATA[sid]; setAcc(sid);
   const MIN = d.simulacro?.examen || 60;
-  // Formato del examen: nº de preguntas y puntos de cada parte (por defecto 20 test · 5 desarrollo · 2 práctica = 4 + 3 + 3)
-  const F={nt:20, nc:5, ne:2, nd:2, pt:4, pc:3, pe:3, ...(d.simulacro?.formato||{})};
+  // Formato fijo para todas las asignaturas y trimestres (petición del 26-11-2026):
+  // 20 test (4 p: acierto +0,2 · fallo −0,066 · en blanco 0) · 3 de desarrollo (3 p, 1 cada una) · 2 ejercicios prácticos (3 p, 1,5 cada uno).
+  // De «formato» solo se usan las preferencias de cómo elegir: mix (test sin priorizar los de examen), mixE (prácticos de cualquier tipo), soloCanvas (uno de los prácticos es de Canvas).
+  const fo=d.simulacro?.formato||{};
+  const F={nt:20, nc:3, ne:2, pt:4, pc:3, pe:3, mix:!!fo.mix, mixE:!!fo.mixE, canvas:!!fo.soloCanvas};
   // Parte 1: 20 preguntas tipo test (prioriza las de los puntos de examen si existen)
   const todas=todasPreguntas(sid).concat(d.glosario? shuffle(preguntasGlosario()).slice(0, todasPreguntas(sid).length) : []).filter(q=>!fueraSim(d,q.tema) && q.sim!==0), xs=todas.filter(q=>q.x), resto=todas.filter(q=>!q.x);
   let test;
@@ -1257,31 +1260,31 @@ function vistaExamen(sid){
   test = shuffle(test).map(q=>({...q, orden:shuffle(q.o.map((_,i)=>i))}));
   // Parte 2: preguntas cortas (de los puntos de examen; si no hay, a partir de las tarjetas)
   let poolC=[]; temasSim(d).forEach(t=>(t.simCortas||t.cortas||[]).forEach((c,i)=>poolC.push({...c, tema:t.n, id:`${sid}-t${t.n}-${t.simCortas?'s':'c'}${i}`})));
-  if(!poolC.length) temasSim(d).forEach(t=>t.flash.forEach((f,i)=>poolC.push({p:f[0], r:f[1], k:[], tema:t.n, id:`${sid}-t${t.n}-f${i}`})));
-  const cortas=F.nc? repartir(poolC, F.nc) : [];
-  // Parte 3: 1 o 2 ejercicios prácticos (primero los de cálculo)
-  let poolE=[]; temasSim(d).forEach(t=>(t.simEj||t.ejercicios||[]).forEach((x,k)=>{ if(F.soloCanvas? x.clasif : !x.clasif) poolE.push({...x, tema:t.n, id:`${sid}-t${t.n}-${t.simEj?'p':'e'}${k}`}); }));
-  let ejs;
-  if(!F.nc){ // Sin preguntas de desarrollo propias: los ejercicios de desarrollo valen la parte de desarrollo y los de cálculo la de práctica
-    const dE=repartir(poolE.filter(x=>x.r==null), F.nd); let pE=repartir(poolE.filter(x=>x.r!=null), F.ne); if(!pE.length) pE=repartir(poolE.filter(x=>x.r==null && !dE.some(y=>y.id===x.id)), F.ne);
-    ejs=dE.map(x=>({...x, pts:F.pc/dE.length, sec:'desarrollo'})).concat(pE.map(x=>({...x, pts:F.pe/pE.length, sec:'práctica'})));
-  } else {
-    ejs = F.mixE? repartir(poolE, F.ne) : repartir(poolE.filter(x=>x.r!=null), F.ne); if(ejs.length<F.ne) ejs=ejs.concat(repartir(poolE.filter(x=>x.r==null && !ejs.some(y=>y.id===x.id)), F.ne-ejs.length));
-    ejs=ejs.map(x=>({...x, pts:F.pe/ejs.length}));
-  }
-  const sumE=ejs.reduce((s,x)=>s+x.pts,0), tituloE=F.nc?'Práctica':'Desarrollo y práctica';
+  // Si la asignatura no tiene preguntas de desarrollo propias (Logística e Inglés del 1.er trimestre), salen de sus ejercicios de redacción
+  const usarC = poolC.length>=F.nc;
+  const cortas = usarC? repartir(poolC, F.nc) : [];
+  // Parte 3: 2 ejercicios prácticos (primero los de cálculo, salvo mixE)
+  let poolE=[]; temasSim(d).forEach(t=>(t.simEj||t.ejercicios||[]).forEach((x,k)=>{ if(F.canvas || !x.clasif) poolE.push({...x, tema:t.n, id:`${sid}-t${t.n}-${t.simEj?'p':'e'}${k}`}); }));
+  const dE = usarC? [] : repartir(poolE.filter(x=>x.r==null && !x.clasif), F.nc);
+  const libre = x=>!dE.some(y=>y.id===x.id) && !pE.some(y=>y.id===x.id);
+  let pE = F.canvas? repartir(poolE.filter(x=>x.clasif), 1) : [];
+  const otros=()=>poolE.filter(x=>!x.clasif && libre(x));
+  pE = pE.concat(repartir(F.mixE? otros() : otros().filter(x=>x.r!=null), F.ne-pE.length));
+  if(pE.length<F.ne) pE = pE.concat(repartir(otros(), F.ne-pE.length));
+  const ejs = dE.map(x=>({...x, pts:F.pc/dE.length, sec:'desarrollo'})).concat(pE.map(x=>({...x, pts:F.pe/pE.length, sec:'práctica'})));
+  const sumE=ejs.reduce((s,x)=>s+x.pts,0), tituloE=usarC?'Práctica':'Desarrollo y práctica';
   const ptsG=ids=>ids.reduce((s,i)=>s+ejs[i].pts,0), idsE=f=>ejs.map((x,i)=>f(x)?i:-1).filter(i=>i>=0);
-  const gruposE=(F.nc? [['Práctica', idsE(()=>true)]] : [['Desarrollo', idsE(x=>x.sec==='desarrollo')], ['Práctica', idsE(x=>x.sec==='práctica')]]).filter(g=>g[1].length);
+  const gruposE=[['Desarrollo', idsE(x=>x.sec==='desarrollo')], ['Práctica', idsE(x=>x.sec==='práctica')]].filter(g=>g[1].length);
   const wr = sid==='ingles'? WRITING[Math.floor(Math.random()*WRITING.length)] : null;
   const ptsC = cortas.length? F.pc/cortas.length : 0, MAX = F.pt + (cortas.length?F.pc:0) + sumE;
-  const vOk=10/test.length, vMal=4/test.length;
+  const vOk=F.pt/F.nt, vMal=0.066; // en puntos del examen (sobre 4)
 
   const respT=new Array(test.length).fill(null);
   app.innerHTML = topbar(`<button onclick="ir('')">Inicio</button><span>/</span><button onclick="ir('${sid}')">${esc(a.nombre)}</button><span>/</span><span>Simulacro</span>`)+`
   <h1>Simulacro tipo examen</h1>
   <p class="muted" style="margin-top:8px;max-width:70ch">Mismo formato que el examen: <b>${test.length} preguntas tipo test</b> (${fmtN(F.pt,0)} puntos)${cortas.length?`, <b>${cortas.length} preguntas de desarrollo</b> (${fmtN(F.pc,0)} puntos)`:''}${cortas.length||gruposE.length<2?' y ':', '}${gruposE.map(([tit,ids])=>`<b>${ids.length} ejercicio${ids.length===1?'':'s'} de ${tit.toLowerCase()}</b> (${fmtN(ptsG(ids),0)} puntos)`).join(' y ')}${wr?', más un <b>writing</b> que se corrige aparte':''}. Tienes ${MIN} minutos. Al entregar ves la nota sobre 10.</p>
   <div class="bar-exam"><span class="timer" id="timer"></span><span class="mono muted" id="prog"></span><button class="btn primary" data-a="entregar">Entregar y corregir</button></div>
-  <section class="exam-sec"><header><h2>Parte 1 · Test</h2><span class="mono">${fmtN(F.pt,0)} puntos</span><p>Acierto +${fmtN(vOk,2)} · fallo −${fmtN(vMal,2)} (sobre 10, luego se pasa a ${fmtN(F.pt,0)} puntos) · en blanco 0. Para dejar una en blanco, vuelve a pulsar la opción marcada.</p></header>
+  <section class="exam-sec"><header><h2>Parte 1 · Test</h2><span class="mono">${fmtN(F.pt,0)} puntos</span><p>Acierto +${fmtN(vOk,1)} · fallo −${fmtN(vMal,3)} · en blanco 0. Para dejar una en blanco, vuelve a pulsar la opción marcada.</p></header>
     <div class="stack">${test.map((q,i)=>`<div class="eq" data-i="${i}"><div class="qtop"><span class="eyebrow">${i+1} de ${test.length} · Tema ${q.tema}</span></div><div class="qtext">${q.p}</div>
       <div class="opts">${q.orden.map((oi,k)=>`<button class="opt" data-o="${oi}" aria-pressed="false"><span class="l">${'ABCD'[k]}</span><span>${q.o[oi]}</span></button>`).join('')}</div></div>`).join('')}</div></section>
   ${cortas.length?`<section class="exam-sec"><header><h2>Parte 2 · Desarrollo</h2><span class="mono">${fmtN(F.pc,0)} puntos</span><p>Responde con tus palabras, como en el examen. ${fmtN(ptsC,2)} puntos cada una.</p></header>
@@ -1316,7 +1319,7 @@ function vistaExamen(sid){
     const wtxt = wta? wta.value : '';
     // Test
     let ok=0, mal=0, bl=0; test.forEach((q,i)=>{ const r=respT[i]; if(r===null){ bl++; P.fallos[q.id]=1; } else if(r===q.c){ ok++; delete P.fallos[q.id]; } else { mal++; P.fallos[q.id]=1; } });
-    const t10=Math.max(0, ok*vOk - mal*vMal), tPts=t10*F.pt/10;
+    const tPts=Math.max(0, ok*vOk - mal*vMal), t10=tPts*10/F.pt;
     // Cortas y ejercicios: null = pendiente de corregir
     const cs=cortas.map(()=>null);
     const es=ejs.map((x,i)=>{ if(x.clasif) return respK[i].filter((v,j)=>v!=='' && Number(v)===x.clasif.items[j][1]).length/x.clasif.items.length; if(x.r==null) return null; const v=num(respE[i]); if(isNaN(v)) return 0; const tol = x.tol ?? Math.max(Math.abs(x.r)*0.002, Math.pow(10,-(x.dec??2))); return Math.abs(v-x.r)<=tol? 1 : 0; });
@@ -1353,7 +1356,7 @@ function vistaExamen(sid){
       <span class="lab">Tu texto</span><div class="mine">${wtxt.trim()? esc(wtxt) : '<span class="muted">En blanco</span>'}</div>
       ${wtxt.trim()?`<div class="row" style="margin-top:10px"><button class="btn primary" data-a="ia" ${SAMPLE?'':'hidden'}>Corregir writing con Claude</button><span class="sin-ia muted" ${SAMPLE?'hidden':''}>La corrección del writing funciona al abrir la app desde Claude.</span></div><div class="wout" aria-live="polite" style="margin-top:10px"></div>`:''}</div></section>`:''}
     <section class="exam-sec"><header><h2>Test: revisa tus fallos</h2><span class="mono">${mal+bl}</span></header>
-      ${(mal+bl)?`<div class="review" style="max-width:none">${test.map((q,i)=>({q,r:respT[i]})).filter(x=>x.r!==x.q.c).map(({q,r})=>`<div class="item"><b>${q.p}</b><p>${r===null?'<span class="muted">En blanco.</span><br>':`Tu respuesta: <span style="color:var(--bad)">${q.o[r]}</span> <span class="muted">(−${fmtN(vMal,2)})</span><br>`}Correcta: <span style="color:var(--ok);font-weight:700">${q.o[q.c]}</span></p><p class="muted">${q.e}</p></div>`).join('')}</div>`:'<div class="empty">Ningún fallo en el test.</div>'}</section>
+      ${(mal+bl)?`<div class="review" style="max-width:none">${test.map((q,i)=>({q,r:respT[i]})).filter(x=>x.r!==x.q.c).map(({q,r})=>`<div class="item"><b>${q.p}</b><p>${r===null?'<span class="muted">En blanco.</span><br>':`Tu respuesta: <span style="color:var(--bad)">${q.o[r]}</span> <span class="muted">(−${fmtN(vMal,3)})</span><br>`}Correcta: <span style="color:var(--ok);font-weight:700">${q.o[q.c]}</span></p><p class="muted">${q.e}</p></div>`).join('')}</div>`:'<div class="empty">Ningún fallo en el test.</div>'}</section>
     ${pie()}`;
 
     function recalc(){
@@ -2193,7 +2196,7 @@ ESTUDIO.ampliar("financiacion", {
 /* Logística de Almacenamiento — contenido elaborado a partir de los apuntes (Temas 1 a 7) */
 ESTUDIO.registrar({
 id: "logistica",
-simulacro: {n: 30, min: 35, formato: {nt: 30, nc: 0, ne: 2, mix: true}},
+simulacro: {n: 30, min: 35, formato: {mix: true}},
 temas: [
 
 /* ======================= TEMA 1 ======================= */
@@ -5160,7 +5163,7 @@ ejercicios: [
 /* Comercio Digital Internacional — contenido elaborado a partir de los apuntes (Temas 1 a 7) */
 ESTUDIO.registrar({
 id: "comercio",
-simulacro: {n: 30, min: 35, fuera: [7], formato: {nc: 2, ne: 1, soloCanvas: true}},
+simulacro: {n: 30, min: 35, fuera: [7], formato: {soloCanvas: true}},
 temas: [
 
 /* ======================= TEMA 1 ======================= */
@@ -7115,7 +7118,7 @@ ESTUDIO.extra("comercio", {
 (DATA.logistica?.temas||[]).forEach(t=>{ delete t.cortas; });
 /* Inglés: las preguntas cortas se sustituyen por el apartado «Desarrollo»; el simulacro queda en test + ejercicios (+ writing) */
 (DATA.ingles?.temas||[]).forEach(t=>{ delete t.cortas; });
-if(DATA.ingles) DATA.ingles.simulacro={...(DATA.ingles.simulacro||{}), formato:{nt:20, nc:0, ne:2, mix:true}};
+if(DATA.ingles) DATA.ingles.simulacro={...(DATA.ingles.simulacro||{}), formato:{mix:true}};
 /* ---------- Fin práctica extra ---------- */
 /* ===== SEGUNDO TRIMESTRE: contenido ===== */
 ESTUDIO.registrar({
@@ -7747,7 +7750,7 @@ ejercicios: [
 });
 ESTUDIO.registrar({
 id: "logistica2",
-simulacro: {n: 30, min: 35, formato: {nt: 30, nc: 0, ne: 2, mix: true}},
+simulacro: {n: 30, min: 35, formato: {mix: true}},
 temas: [
 
 /* ======================= TEMA 9 ======================= */
@@ -8346,7 +8349,7 @@ ejercicios: [
 });
 ESTUDIO.registrar({
 id: "ingles2",
-simulacro: {n: 30, min: 30, formato: {nt: 20, nc: 0, ne: 2, mix: true}},
+simulacro: {n: 30, min: 30, formato: {mix: true}},
 temas: [
 
 /* ======================= UNIT 8 ======================= */
@@ -10173,7 +10176,17 @@ test: [
  {p:"La declaración ante notario que certifica el impago de una letra es…", o:["El protesto","La novación","El endoso","La aceptación"], c:0, e:"Permite reclamar al aceptante o a los endosantes."},
  {p:"Sustituir una deuda por otra nueva con vencimiento futuro es…", o:["La novación","El protesto","El factoring","El aval"], c:0, e:"Se considera extinguida la deuda anterior."},
  {p:"Una empresa española que cobra una venta en dólares debe…", o:["Vender los dólares para obtener euros","Comprar dólares","Pagar un protesto","Pedir un pagaré"], c:0, e:"Quien paga en divisa, en cambio, la compra."},
- {p:"Con 1 € = 1,3085 $, una factura de 2.200 € equivale a…", o:["2.878,70 $","1.681,32 $","2.200 $","2.287,85 $"], c:0, e:"2.200 · 1,3085."}
+ {p:"Con 1 € = 1,3085 $, una factura de 2.200 € equivale a…", o:["2.878,70 $","1.681,32 $","2.200 $","2.287,85 $"], c:0, e:"2.200 · 1,3085."},
+ {p:"¿Cuáles son las cuatro partes que intervienen en una transferencia?", o:["Ordenante, beneficiario, entidad emisora y entidad receptora","Librador, librado, tomador y avalista","Titular, comercio, TPV y notario","Exportador, importador, aduana y transportista"], c:0, e:"Si ordenante y beneficiario están en la misma entidad, es un traspaso interno."},
+ {p:"El BIC del banco del beneficiario también se conoce como…", o:["Código Swift","IBAN","PIN","CVV"], c:0, e:"El IBAN identifica la cuenta; el BIC o Swift, la entidad."},
+ {p:"¿Dónde está el principal riesgo de una transferencia?", o:["En que el ordenante no la emita, en el paso entre entidades o en el uso fraudulento de los datos","En que el notario no la certifique","En que el TPV falle","En que la divisa se revalorice siempre"], c:0, e:"Por lo demás, es un medio de pago muy seguro."},
+ {p:"La comunicación al Banco de España de las transferencias internacionales de más de 50.000 € se hace…", o:["A efectos estadísticos","Para cobrar un impuesto","Para bloquearlas","Para que las pague el beneficiario"], c:0, e:"No supone ningún coste ni bloqueo."},
+ {p:"Una tarjeta de crédito, a diferencia de una de débito…", o:["Ofrece financiación con un límite de dinero disponible","Exige saldo suficiente en la cuenta","Carga el pago al instante","No tiene ningún coste"], c:0, e:"La de débito carga al instante y solo con saldo."},
+ {p:"¿Quién paga las comisiones del TPV?", o:["El comercio","El cliente que paga con débito","El Banco de España","El notario"], c:0, e:"El cliente paga las de su tarjeta de crédito."},
+ {p:"¿Qué debes hacer primero si te roban la tarjeta?", o:["Anularla y denunciarlo","Esperar al extracto del mes","Pedir una novación","Protestarla ante notario"], c:0, e:"El titular responde hasta 150 € de lo gastado antes de la denuncia."},
+ {p:"Un impago de 18.000 € se reclama judicialmente por el procedimiento de…", o:["Hasta 30.000 €","Más de 30.000 €","Más de 50.000 €","Ninguno: no se puede reclamar"], c:0, e:"Hay dos procedimientos según el importe: hasta 30.000 € o más de 30.000 €."},
+ {p:"Una empresa española que paga una compra en libras debe…", o:["Comprar libras","Vender libras","Protestar la factura","Pedir el IBAN al Banco de España"], c:0, e:"Quien paga en divisa la compra; quien cobra en divisa la vende."},
+ {p:"Con 1 € = 1,25 $, un cobro de 5.000 $ equivale a…", o:["4.000 €","6.250 €","5.000 €","3.750 €"], c:0, e:"Importe en € = importe en $ ÷ cambio: 5.000 / 1,25 = 4.000 €."}
 ],
 cortas: [
  {p:"Explica la transferencia bancaria: partes, datos, tipos, costes y riesgos.", r:"El <b>ordenante</b> pide a su banco (<b>emisora</b>) que envíe dinero a la cuenta del <b>beneficiario</b> en la <b>receptora</b>. Datos: identificación de ambos, importe y moneda, <b>IBAN</b>, <b>BIC/Swift</b> y concepto. Tipos: nacionales o internacionales; presencial, cajero, teléfono o telemática; ordinarias o urgentes. Es muy segura; las comisiones dependen de la forma, el ámbito y la urgencia, cada parte paga las de su entidad y las internacionales de más de 50.000 € se comunican al Banco de España.", k:["cuatro partes","IBAN y BIC","tipos","comisiones","50.000 € al Banco de España"]},
